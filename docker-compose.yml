@@ -3,6 +3,8 @@ services:
     image: portainer/agent:latest
     container_name: portainer_agent
     restart: always
+    ports:
+      - "9001:9001"  # Insecure if exposed to all IPs!
     networks:
       - internal_backend
     volumes:
