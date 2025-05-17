@@ -1,0 +1,15 @@
+services:
+  portainer_agent:
+    image: portainer/agent:latest
+    container_name: portainer_agent
+    restart: always
+    networks:
+      - internal_backend
+    volumes:
+      - /var/run/docker.sock:/var/run/docker.sock
+      - /var/lib/docker/volumes:/var/lib/docker/volumes
+
+networks:
+  internal_backend:
+    name: internal_backend
+    driver: bridge
