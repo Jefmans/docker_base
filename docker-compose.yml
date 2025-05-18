@@ -1,6 +1,6 @@
 services:
   traefik:
-    image: traefik:v2.11
+    image: traefik:latest
     container_name: traefik
     restart: always
     command:
@@ -20,8 +20,6 @@ services:
       - "traefik.http.routers.traefik.rule=PathPrefix(`/dashboard`)"
       - "traefik.http.routers.traefik.entrypoints=web"
       - "traefik.http.routers.traefik.service=api@internal"
-      - "--providers.docker.endpoint=unix:///var/run/docker.sock"
-
 
 
 
@@ -38,39 +36,39 @@ services:
       - /var/lib/docker/volumes:/var/lib/docker/volumes
 
 
-  postgres:
-    image: postgres:latest
-    container_name: postgres
-    restart: always
-    environment:
-      POSTGRES_USER: test
-      POSTGRES_PASSWORD: test
-      POSTGRES_DB: testdb
-    volumes:
-      - postgres_data:/var/lib/postgresql/data
-    networks:
-      - internal_backend
-    labels:
-      - "traefik.enable=true"
-      - "traefik.http.routers.postgres.rule=PathPrefix(`/db`)"
-      - "traefik.http.routers.postgres.entrypoints=web"
-      - "traefik.http.routers.postgres.middlewares=db-strip"
-      - "traefik.http.middlewares.db-strip.stripprefix.prefixes=/db"
-      - "traefik.http.services.postgres.loadbalancer.server.port=5432"  # not an HTTP port, only for test purposes
+  # postgres:
+  #   image: postgres:latest
+  #   container_name: postgres
+  #   restart: always
+  #   environment:
+  #     POSTGRES_USER: test
+  #     POSTGRES_PASSWORD: test
+  #     POSTGRES_DB: testdb
+  #   volumes:
+  #     - postgres_data:/var/lib/postgresql/data
+  #   networks:
+  #     - internal_backend
+  #   labels:
+  #     - "traefik.enable=true"
+  #     - "traefik.http.routers.postgres.rule=PathPrefix(`/db`)"
+  #     - "traefik.http.routers.postgres.entrypoints=web"
+  #     - "traefik.http.routers.postgres.middlewares=db-strip"
+  #     - "traefik.http.middlewares.db-strip.stripprefix.prefixes=/db"
+  #     - "traefik.http.services.postgres.loadbalancer.server.port=5432"  # not an HTTP port, only for test purposes
 
 
-  backend:
-    build:
-      context: ./backend
-    container_name: backend
-    restart: always
-    networks:
-      - internal_backend
-    labels:
-      - "traefik.enable=true"
-      - "traefik.http.routers.api.rule=PathPrefix(`/api`)"
-      - "traefik.http.routers.api.entrypoints=web"
-      - "traefik.http.services.api.loadbalancer.server.port=8000"
+  # backend:
+  #   build:
+  #     context: ./backend
+  #   container_name: backend
+  #   restart: always
+  #   networks:
+  #     - internal_backend
+  #   labels:
+  #     - "traefik.enable=true"
+  #     - "traefik.http.routers.api.rule=PathPrefix(`/api`)"
+  #     - "traefik.http.routers.api.entrypoints=web"
+  #     - "traefik.http.services.api.loadbalancer.server.port=8000"
 
 
 
