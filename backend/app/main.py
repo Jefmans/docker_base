@@ -1,9 +1,10 @@
 from fastapi import FastAPI
-from fastapi.middleware.proxy_headers import ProxyHeadersMiddleware
-
 from app.routers import health
 
-app = FastAPI()
-app.add_middleware(ProxyHeadersMiddleware)
+app = FastAPI(
+    openapi_url="/api/openapi.json",
+    docs_url="/api/docs",
+    redoc_url="/api/redoc"
+)
 
 app.include_router(health.router)
