@@ -21,6 +21,16 @@ services:
       - "traefik.http.routers.traefik.entrypoints=web"
       - "traefik.http.routers.traefik.service=api@internal"
 
+  whoami:
+    image: traefik/whoami
+    container_name: whoami
+    restart: always
+    networks:
+      - internal_backend
+    labels:
+      - "traefik.enable=true"
+      - "traefik.http.routers.whoami.rule=PathPrefix(`/whoami`)"
+      - "traefik.http.routers.whoami.entrypoints=web"
 
 
   portainer_agent:
