@@ -20,6 +20,8 @@ services:
       - "traefik.http.routers.traefik.rule=PathPrefix(`/dashboard`)"
       - "traefik.http.routers.traefik.entrypoints=web"
       - "traefik.http.routers.traefik.service=api@internal"
+      - "--providers.docker.endpoint=unix:///var/run/docker.sock"
+
 
 
 
