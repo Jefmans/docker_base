@@ -69,6 +69,23 @@ services:
       - "traefik.http.services.postgres.loadbalancer.server.port=5432"  # not an HTTP port, only for test purposes
 
 
+  pgadmin:
+    image: dpage/pgadmin4:8.6
+    container_name: pgadmin
+    restart: always
+    environment:
+      PGADMIN_DEFAULT_EMAIL: test
+      PGADMIN_DEFAULT_PASSWORD: test
+    volumes:
+      - pgadmin_data:/var/lib/pgadmin
+    networks:
+      - internal_backend
+    labels:
+      - "traefik.enable=true"
+      - "traefi
+
+
+
   backend:
     build:
       context: ./backend
@@ -87,6 +104,8 @@ services:
 
 volumes:
   postgres_data:
+  pgadmin_data:
+
 
 
 networks:
