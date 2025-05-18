@@ -8,4 +8,5 @@ app = FastAPI(
     openapi_url="/api/openapi.json"
 )
 
+# Prefix router to align everything under `/api`
 app.include_router(health.router, prefix="/api")
