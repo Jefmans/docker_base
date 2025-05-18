@@ -3,10 +3,10 @@ from app.routers import health
 
 app = FastAPI(
     title="My API",
-    docs_url="/api/docs",
-    redoc_url="/api/redoc",
-    openapi_url="/api/openapi.json"
+    docs_url="/backend/docs",
+    redoc_url="/backend/redoc",
+    openapi_url="/backend/openapi.json"
 )
 
-# Prefix router to align everything under `/api`
-app.include_router(health.router, prefix="/api")
+# Optional: If you're mounting routes, align them too
+app.include_router(health.router, prefix="/backend")
