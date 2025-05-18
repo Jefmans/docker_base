@@ -1,5 +1,5 @@
 from fastapi import FastAPI
-from starlette.middleware.proxy_headers import ProxyHeadersMiddleware
+from fastapi.middleware.proxy_headers import ProxyHeadersMiddleware
 
 from app.routers import health
 
