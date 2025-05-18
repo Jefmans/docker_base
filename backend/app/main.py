@@ -3,9 +3,9 @@ from app.routers import health
 
 app = FastAPI(
     title="My API",
-    docs_url="/docs",                # Exposed at /api/docs (after Traefik prefix strip)
-    redoc_url="/redoc",
-    openapi_url="/openapi.json"
+    docs_url="/api/docs",
+    redoc_url="/api/redoc",
+    openapi_url="/api/openapi.json"
 )
 
-app.include_router(health.router)
+app.include_router(health.router, prefix="/api")
