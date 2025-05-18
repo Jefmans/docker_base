@@ -5,23 +5,16 @@ services:
     restart: always
     command:
       - "--providers.docker=true"
-      - "--providers.docker.exposedbydefault=false"
       - "--entrypoints.web.address=:80"
-      - "--api.dashboard=true"
       - "--api.insecure=true"  # Only for local/dev
     ports:
       - "80:80"
+      - "8080:8080"
     networks:
       - internal_backend
     volumes:
       - /var/run/docker.sock:/var/run/docker.sock
-    labels:
-      - "traefik.enable=true"
-      # - "traefik.http.routers.traefik.rule=PathPrefix(`/dashboard`)"
-      # - "traefik.http.routers.traefik.rule=PathPrefix(`/dashboard`) || PathPrefix(`/api`)"
-      - "traefik.http.routers.traefik.rule=PathPrefix(`/dashboard`) || PathPrefix(`/traefik-api`)"
-      - "traefik.http.routers.traefik.entrypoints=web"
-      # - "traefik.http.routers.traefik.service=api@internal"
+    
 
   whoami:
     image: traefik/whoami
