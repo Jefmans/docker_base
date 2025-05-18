@@ -84,7 +84,10 @@ services:
       - "traefik.enable=true"
       - "traefik.http.routers.pgadmin.rule=PathPrefix(`/pgadmin`)"
       - "traefik.http.routers.pgadmin.entrypoints=web"
+      - "traefik.http.routers.pgadmin.middlewares=pgadmin-strip"
+      - "traefik.http.middlewares.pgadmin-strip.stripprefix.prefixes=/pgadmin"
       - "traefik.http.services.pgadmin.loadbalancer.server.port=80"
+
 
 
 
