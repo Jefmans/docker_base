@@ -1,6 +1,7 @@
 from fastapi import APIRouter, UploadFile, File, HTTPException
 from minio import Minio
 import uuid
+import io
 
 router = APIRouter()
 
@@ -21,10 +22,13 @@ async def upload_file(file: UploadFile = File(...)):
         unique_filename = f"{uuid.uuid4()}_{file.filename}"
         content = await file.read()
 
+        # Wrap bytes in a stream
+        stream = io.BytesIO(content)        
+
         minio_client.put_object(
             bucket_name=BUCKET_NAME,
             object_name=unique_filename,
-            data=content,
+            data=stream,
             length=len(content),
             content_type=file.content_type,
         )
