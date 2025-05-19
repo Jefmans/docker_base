@@ -1,5 +1,5 @@
 from fastapi import FastAPI
-from app.routers import health
+from app.routers import health, upload
 
 app = FastAPI(
     title="My API",
@@ -10,3 +10,5 @@ app = FastAPI(
 
 # Optional: If you're mounting routes, align them too
 app.include_router(health.router, prefix="/backend")
+app.include_router(upload.router, prefix="/backend")
+

@@ -144,13 +144,7 @@ services:
       - internal_backend
     ports:
       - "9101:9001"       
-    # labels:
-    #   - "traefik.enable=true"
-    #   - "traefik.http.routers.minio.rule=PathPrefix(`/minio`)"
-    #   - "traefik.http.routers.minio.entrypoints=web"
-    #   - "traefik.http.routers.minio.middlewares=minio-strip"
-    #   - "traefik.http.middlewares.minio-strip.stripprefix.prefixes=/minio"
-    #   - "traefik.http.services.minio.loadbalancer.server.port=9101"
+
 
 
 
