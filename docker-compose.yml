@@ -146,9 +146,11 @@ services:
       - "traefik.enable=true"
       - "traefik.http.routers.minio.rule=PathPrefix(`/minio`)"
       - "traefik.http.routers.minio.entrypoints=web"
-      - "traefik.http.routers.minio.middlewares=minio-strip"
+      - "traefik.http.routers.minio.middlewares=minio-strip,minio-rewrite"
       - "traefik.http.middlewares.minio-strip.stripprefix.prefixes=/minio"
+      - "traefik.http.middlewares.minio-rewrite.headers.customrequestheaders.X-Forwarded-Prefix=/minio"
       - "traefik.http.services.minio.loadbalancer.server.port=9001"
+
 
 
 
