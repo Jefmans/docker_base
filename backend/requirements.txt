@@ -4,3 +4,4 @@ psycopg2-binary
 sqlalchemy
 minio
 python-multipart
+requests

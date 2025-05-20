@@ -151,7 +151,7 @@ services:
     container_name: unstructured
     restart: always
     ports:
-      - "8891:8000"
+      - "8002:8000"
     networks:
       - internal_backend
     labels:
