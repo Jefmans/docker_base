@@ -2,6 +2,8 @@ from fastapi import APIRouter, HTTPException
 from minio import Minio
 import requests
 import io
+import fitz  # PyMuPDF
+
 
 router = APIRouter()
 
@@ -39,6 +41,53 @@ def extract_text(filename: str):
         # Optional: Save to disk or return
         return {
             "filename": filename,
+            "extracted_characters": len(text),
+            "preview": text[:500]
+        }
+
+    except Exception as e:
+        raise HTTPException(status_code=500, detail=str(e))
+
+
+
+def extract_first_5_pages(pdf_bytes: bytes) -> io.BytesIO:
+    try:
+        doc = fitz.open(stream=pdf_bytes, filetype="pdf")
+        new_doc = fitz.open()
+        for i in range(min(5, len(doc))):
+            new_doc.insert_pdf(doc, from_page=i, to_page=i)
+
+        output = io.BytesIO()
+        new_doc.save(output)
+        output.seek(0)
+        return output
+    except Exception as e:
+        raise RuntimeError(f"PDF processing failed: {e}")
+
+
+@router.post("/extract/preview/")
+def extract_preview(filename: str):
+    try:
+        # Step 1: Get file from MinIO
+        response = minio_client.get_object(MINIO_BUCKET, filename)
+        file_data = response.read()
+
+        # Step 2: Trim PDF to 5 pages
+        short_pdf = extract_first_5_pages(file_data)
+
+        # Step 3: Send to unstructured API
+        files = {"files": (filename, short_pdf, "application/pdf")}
+        res = requests.post(UNSTRUCTURED_API_URL, files=files)
+
+        if res.status_code != 200:
+            raise Exception(res.text)
+
+        elements = res.json()
+        text = "\n".join(e.get("text", "") for e in elements if e.get("text"))
+
+        return {
+            "filename": filename,
+            "pages_processed": 5,
             "extracted_characters": len(text),
             "preview": text[:500]
         }

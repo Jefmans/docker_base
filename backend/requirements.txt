@@ -5,3 +5,4 @@ sqlalchemy
 minio
 python-multipart
 requests
+pymupdf
