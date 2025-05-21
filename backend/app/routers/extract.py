@@ -14,7 +14,7 @@ minio_client = Minio(
     secure=False
 )
 
-UNSTRUCTURED_API_URL = "http://unstructured:8000/general/v0/general"
+UNSTRUCTURED_API_URL = "http://95.216.215.141:8000/general/v0/general"
 
 @router.post("/extract/")
 def extract_text(filename: str):
