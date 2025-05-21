@@ -3,4 +3,5 @@ uvicorn
 python-multipart
 pymupdf
 unstructured
+pdfminer.six
 minio
