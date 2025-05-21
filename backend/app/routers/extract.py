@@ -60,7 +60,7 @@ def extract_text(filename: str):
         return {
             "filename": filename,
             "extracted_characters": len(text),
-            "preview": text[:500]
+            "preview": text
         }
 
     except Exception as e:

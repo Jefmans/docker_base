@@ -146,6 +146,15 @@ services:
       - "9101:9001"       
 
 
+  unstructured_custom:
+    build:
+      context: ./unstructured  # your local folder
+    container_name: unstructured_custom
+    ports:
+      - "8003:8000"
+    networks:
+      - internal_backend
+
 
 volumes:
   postgres_data:
