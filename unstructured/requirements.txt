@@ -5,3 +5,4 @@ pymupdf
 unstructured
 pdfminer.six
 minio
+pi-heif
