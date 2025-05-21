@@ -1,0 +1,5 @@
+langchain
+PyMuPDF
+pymupdf
+minio
+python-dotenv
