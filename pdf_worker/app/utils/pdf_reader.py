@@ -4,6 +4,7 @@ from minio import Minio
 import os
 
 def read_pdf_from_minio(filename: str, bucket: str = "uploads") -> list:
+    
     minio_client = Minio(
         "minio:9000",
         access_key="minioadmin",
