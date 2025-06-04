@@ -1,5 +1,5 @@
-langchain
-PyMuPDF
-pymupdf
+fastapi
+uvicorn[standard]
 minio
-python-dotenv
+PyMuPDF
+langchain

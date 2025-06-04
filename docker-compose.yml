@@ -146,17 +146,33 @@ services:
       - "9101:9001"       
 
 
-  pdf_reader:
+  # pdf_reader:
+  #   build:
+  #     context: ./pdf_worker
+  #   container_name: pdf_reader
+  #   restart: always
+  #   environment:
+  #     PDF_NAME: "95bb61ea-0f6c-432e-b983-1e2804a6fa59_de_witte.pdf"  # Set to a known PDF in MinIO
+  #   networks:
+  #     - internal_backend
+
+
+  pdf_worker:
     build:
       context: ./pdf_worker
-    container_name: pdf_reader
+    container_name: pdf_worker
     restart: always
-    environment:
-      PDF_NAME: "95bb61ea-0f6c-432e-b983-1e2804a6fa59_de_witte.pdf"  # Set to a known PDF in MinIO
     networks:
       - internal_backend
     depends_on:
       - minio
+    labels:
+      - "traefik.enable=true"
+      - "traefik.http.routers.pdfworker.rule=PathPrefix(`/pdfworker`)"
+      - "traefik.http.routers.pdfworker.entrypoints=web"
+      - "traefik.http.routers.pdfworker.middlewares=strip-worker"
+      - "traefik.http.middlewares.strip-worker.stripprefix.prefixes=/pdfworker"
+      - "traefik.http.services.pdfworker.loadbalancer.server.port=8000"
 
 
 
