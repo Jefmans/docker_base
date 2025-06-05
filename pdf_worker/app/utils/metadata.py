@@ -4,6 +4,7 @@ from langchain.output_parsers import PydanticOutputParser
 import os
 from dotenv import load_dotenv
 from langchain.prompts import PromptTemplate
+from app.models import DocumentMetadata
 
 
 
