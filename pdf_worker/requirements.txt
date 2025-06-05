@@ -4,4 +4,4 @@ minio
 PyMuPDF
 langchain
 langchain-community
-
+pydantic
