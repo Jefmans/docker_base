@@ -1,5 +1,5 @@
 from fastapi import FastAPI, HTTPException
-from app.utils.pdf_reader import read_pdf_from_minio
+from app.utils.pdf_reader import read_pdf_from_minio, download_from_minio
 
 from app.utils.metadata import get_doc_info
 # from app.utils.image_extraction import extract_images_and_captions  # to implement

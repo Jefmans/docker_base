@@ -20,3 +20,19 @@ def read_pdf_from_minio(filename: str, bucket: str = "uploads") -> list:
     loader = PyMuPDFLoader(local_path)
     documents = loader.load()
     return documents 
+
+
+def download_from_minio(filename: str, bucket: str = "uploads") -> list:
+    
+    minio_client = Minio(
+        "minio:9000",
+        access_key="minioadmin",
+        secret_key="minioadmin123",
+        secure=False
+    )
+
+    # Download file from MinIO
+    local_path = f"/tmp/{filename}"
+    minio_client.fget_object(bucket, filename, local_path)
+
+    return local_path
