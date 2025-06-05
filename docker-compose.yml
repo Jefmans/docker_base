@@ -158,6 +158,8 @@ services:
 
 
   pdf_worker:
+    env_file:
+      - .env
     build:
       context: ./pdf_worker
     container_name: pdf_worker
