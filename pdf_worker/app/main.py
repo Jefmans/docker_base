@@ -5,6 +5,8 @@ from app.utils.metadata import get_doc_info
 # from app.utils.image_extraction import extract_images_and_captions  # to implement
 from app.models import DocumentMetadata, ImageMetadata
 
+from typing import Optional, List
+
 app = FastAPI(root_path="/pdfworker")
 
 @app.post("/extract/{filename}")
@@ -30,9 +32,9 @@ def extract_metadata(filename: str):
         raise HTTPException(status_code=500, detail=str(e))
 
 
-@app.post("/images/{filename}", response_model=List[ImageMetadata])
-def extract_images(filename: str):
-    try:
-        return extract_images_and_captions(filename)
-    except Exception as e:
-        raise HTTPException(status_code=500, detail=str(e))
+# @app.post("/images/{filename}", response_model=List[ImageMetadata])
+# def extract_images(filename: str):
+#     try:
+#         return extract_images_and_captions(filename)
+#     except Exception as e:
+#         raise HTTPException(status_code=500, detail=str(e))
