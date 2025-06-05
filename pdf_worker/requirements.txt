@@ -4,4 +4,6 @@ minio
 PyMuPDF
 langchain
 langchain-community
+langchain-core
+langchain-openai
 pydantic
