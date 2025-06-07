@@ -80,6 +80,7 @@ services:
       - "8081:80" # Temporary Hack): Expose a dedicated port => need a domain
     volumes:
       - pgadmin_data:/var/lib/pgadmin
+      - ./docker/pgadmin/servers.json:/pgadmin4/servers.json
     networks:
       - internal_backend
     labels:
