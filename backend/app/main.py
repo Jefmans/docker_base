@@ -9,13 +9,14 @@ Base.metadata.create_all(bind=engine)
 
 app = FastAPI(
     title="My API",
-    docs_url="/backend/docs",
-    redoc_url="/backend/redoc",
-    openapi_url="/backend/openapi.json"
+    # docs_url="/backend/docs",
+    # redoc_url="/backend/redoc",
+    # openapi_url="/backend/openapi.json",
+    root_path="/backend"
 )
 
 # Optional: If you're mounting routes, align them too
-app.include_router(health.router, prefix="/backend")
-app.include_router(upload.router, prefix="/backend")
-app.include_router(extract.router, prefix="/backend")
+app.include_router(health.router)
+app.include_router(upload.router)
+app.include_router(extract.router)
 app.include_router(process.router)
