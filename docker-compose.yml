@@ -61,8 +61,8 @@ services:
     networks:
       - internal_backend
     labels:
-      - "traefik.enable=true"
-      - "traefik.http.routers.postgres.rule=PathPrefix(`/db`)"
+      # - "traefik.enable=true"
+      # - "traefik.http.routers.postgres.rule=PathPrefix(`/db`)"
       - "traefik.http.routers.postgres.entrypoints=web"
       - "traefik.http.routers.postgres.middlewares=db-strip"
       - "traefik.http.middlewares.db-strip.stripprefix.prefixes=/db"
