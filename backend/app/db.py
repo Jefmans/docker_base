@@ -6,6 +6,15 @@ from sqlalchemy.dialects.postgresql import UUID
 from sqlalchemy.ext.declarative import declarative_base
 import uuid
 
+
+
+# DATABASE_URL = "postgresql://myuser:mypassword@postgres:5432/myappdb"
+DATABASE_URL = "postgresql://test:test@postgres:5432/testdb"
+engine = create_engine(DATABASE_URL)
+SessionLocal = sessionmaker(autocommit=False, autoflush=False, bind=engine)
+
+
+
 Base = declarative_base()
 
 class Document(Base):
@@ -23,10 +32,14 @@ class Document(Base):
     publisher = Column(String)
     created_at = Column(TIMESTAMP)
 
+class ImageRecord(Base):
+    __tablename__ = "images"
 
-
-# DATABASE_URL = "postgresql://myuser:mypassword@postgres:5432/myappdb"
-DATABASE_URL = "postgresql://test:test@postgres:5432/testdb"
-engine = create_engine(DATABASE_URL)
-SessionLocal = sessionmaker(autocommit=False, autoflush=False, bind=engine)
+    id = Column(Integer, primary_key=True, index=True)
+    book_id = Column(String, index=True)
+    source_pdf = Column(String)
+    page_number = Column(Integer)
+    xref = Column(Integer)
+    filename = Column(String, unique=True)
+    caption = Column(String)
 
