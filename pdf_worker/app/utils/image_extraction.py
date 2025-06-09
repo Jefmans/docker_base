@@ -67,13 +67,23 @@ def group_boxes_by_rows(image_boxes: List[Tuple[float]], y_threshold=100) -> Lis
 #         f.write(image_bytes)
 
 def upload_image_to_minio(image_bytes: bytes, filename: str, content_type: str = "image/png"):
-    minio_client.put_object(
-        bucket_name=BUCKET_NAME,
-        object_name=filename,
-        data=io.BytesIO(image_bytes),
-        length=len(image_bytes),
-        content_type=content_type
-    )
+    
+
+    stream = io.BytesIO(image_bytes)
+    stream.seek(0)  # ✅ Ensure stream is at the beginning
+
+    try:
+        minio_client.put_object(
+            bucket_name="images",  # make sure this bucket exists
+            object_name=filename,
+            data=stream,
+            length=len(image_bytes),
+            content_type=content_type
+        )
+        print(f"✅ Uploaded to MinIO: {filename}")
+    except Exception as e:
+        print(f"❌ Error uploading {filename} to MinIO: {e}")
+        raise
 
 
 def process_images_and_captions(
@@ -87,7 +97,7 @@ def process_images_and_captions(
 ) -> List[ImageMetadata]:
     """Processes a range of PDF pages, saving matched images or screenshots and returning metadata."""
 
-    os.makedirs(output_dir, exist_ok=True)
+    # os.makedirs(output_dir, exist_ok=True)
     doc = fitz.open(pdf_path)
     metadata_list = []
 
@@ -130,7 +140,17 @@ def process_images_and_captions(
                 if info["area"] >= size_threshold:
                     filename = f"{book_id}_page{page_index+1:03}_xref{info['xref']}.{info['ext']}"
                     # save_image(filename, info["bytes"], output_dir)
-                    upload_image_to_minio(info["bytes"], filename)
+                    # upload_image_to_minio(info["bytes"], filename)
+                    try:
+                        upload_image_to_minio(
+                                image_bytes=info["bytes"],
+                                filename=filename,
+                                content_type=f"image/{info['ext']}"
+                            )
+                    except Exception as e:
+                        print(f"❌ Skipping image due to error: {e}")
+                        continue
+
                     caption_text = caption_paragraphs[i]["text"] if i < caption_count else ""
                     metadata_list.append(ImageMetadata(
                         book_id, pdf_path, page_index + 1, info["xref"], filename, caption_text
