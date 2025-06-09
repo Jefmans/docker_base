@@ -1,11 +1,13 @@
-from fastapi import APIRouter, HTTPException
+from fastapi import APIRouter, HTTPException, Depends
 import requests
 import uuid
-from app.db import SessionLocal, Document
 from sqlalchemy.orm import Session
-from app.db import get_db
+from app.db import SessionLocal, get_db
 from app.utils.save_images import save_image_metadata_list
-from app.models import ImageMetadata
+from app.models import Document, ImageMetadata
+from pydantic import BaseModel
+from typing import List, Optional
+from app.schemas import ImageMetadata  # ✅ This uses the new schema
 
 
 router = APIRouter()
@@ -50,22 +52,24 @@ def process_metadata(filename: str):
         raise HTTPException(status_code=500, detail=str(e))
 
 
-router = APIRouter()
+
+
+
 
 @router.post("/process/images/{filename}")
 def process_images_and_save(filename: str, db: Session = Depends(get_db)):
     try:
-        # 1. Request image metadata from pdf_worker
+        # 1. Get image metadata from pdf_worker
         response = requests.post(f"http://pdf_worker:8000/images/{filename}")
         if response.status_code != 200:
             raise HTTPException(status_code=500, detail="pdf_worker error: " + response.text)
 
         image_data = response.json()
 
-        # 2. Convert to Pydantic models
+        # 2. Validate with Pydantic schema
         metadata_list = [ImageMetadata(**entry) for entry in image_data]
 
-        # 3. Save to Postgres
+        # 3. Save to PostgreSQL using ORM
         save_image_metadata_list(db, metadata_list)
 
         return {
@@ -76,3 +80,8 @@ def process_images_and_save(filename: str, db: Session = Depends(get_db)):
 
     except Exception as e:
         raise HTTPException(status_code=500, detail=str(e))
+
+
+
+
+

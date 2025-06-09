@@ -1,16 +1,15 @@
-from sqlalchemy.orm import Session
-from app.models import ImageMetadata
-from app.db import ImageRecord
+from app.models import Image
+from app.schemas import ImageMetadata  # Pydantic schema
 
-def save_image_metadata_list(db: Session, metadata_list: list[ImageMetadata]):
+def save_image_metadata_list(db, metadata_list):
     for meta in metadata_list:
-        record = ImageRecord(
+        db.add(Image(
             book_id=meta.book_id,
             source_pdf=meta.source_pdf,
             page_number=meta.page_number,
             xref=meta.xref,
             filename=meta.filename,
-            caption=meta.caption
-        )
-        db.add(record)
+            caption=meta.caption,
+            embedding=meta.embedding
+        ))
     db.commit()
