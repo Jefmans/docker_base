@@ -3,6 +3,7 @@ from langchain_community.document_loaders import PyMuPDFLoader
 from minio import Minio
 import os
 
+
 def read_pdf_from_minio(filename: str, bucket: str = "uploads") -> list:
     
     minio_client = Minio(
@@ -36,3 +37,7 @@ def download_from_minio(filename: str, bucket: str = "uploads") -> list:
     minio_client.fget_object(bucket, filename, local_path)
 
     return local_path
+
+
+
+
