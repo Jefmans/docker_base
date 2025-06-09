@@ -7,7 +7,7 @@ from app.models import DocumentMetadata, ImageMetadata
 
 from typing import Optional, List
 from dataclasses import dataclass, asdict
-from pdf_worker.app.utils.image_extraction import process_images_and_captions
+from app.utils.image_extraction import process_images_and_captions
 import fitz  # PyMuPDF
 
 
