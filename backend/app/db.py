@@ -43,3 +43,11 @@ class ImageRecord(Base):
     filename = Column(String, unique=True)
     caption = Column(String)
 
+
+
+def get_db():
+    db: Session = SessionLocal()
+    try:
+        yield db
+    finally:
+        db.close()
