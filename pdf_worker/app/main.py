@@ -10,7 +10,7 @@ from dataclasses import dataclass, asdict
 from app.utils.image_extraction import process_images_and_captions
 # import fitz  # PyMuPDF
 from app.utils.cleaning.clean_text_pipeline import clean_document_text
-from app.utils.chunking import chunk_text_by_lengths
+from app.utils.text_chunker import chunk_text
 
 
 
@@ -69,7 +69,7 @@ def process_and_chunk_pdf(filename: str):
 
         cleaned_pages = clean_document_text(local_path)
 
-        chunked = chunk_text_by_lengths(cleaned_pages)
+        chunked = chunk_text(cleaned_pages)
 
         return {
             "status": "success",
