@@ -1,0 +1,22 @@
+open powershell => 
+
+
+Get-ChildItem -Recurse -File -Include *.py, *.js, *.ts, *.html, *.css | 
+    Where-Object { -not ($_.FullName -match '\\\.') } |  # Skip hidden folders
+    ForEach-Object {
+        $relativePath = $_.FullName.Replace($PWD.Path, ".")
+        "===== $relativePath =====" | Out-File -Append all_code.txt
+        Get-Content $_ | Out-File -Append all_code.txt
+        "`n`n" | Out-File -Append all_code.txt
+    }
+
+
+
+
+
+
+
+
+
++ add tree => tree /F
++ add compose file

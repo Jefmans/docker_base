@@ -1,10 +1,10 @@
-import os
+# import os
 import fitz  # PyMuPDF
 from PIL import Image
 import io
 import re
 from itertools import chain
-from dataclasses import dataclass, asdict
+# from dataclasses import dataclass, asdict
 from typing import List, Tuple, Dict
 
 
