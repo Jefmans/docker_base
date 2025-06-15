@@ -118,6 +118,28 @@ services:
       - "traefik.http.services.elasticsearch.loadbalancer.server.port=9200"
 
 
+  kibana:
+    image: docker.elastic.co/kibana/kibana:8.12.2
+    container_name: kibana
+    restart: always
+    environment:
+      - ELASTICSEARCH_HOSTS=http://elasticsearch:9200
+      - SERVER_BASEPATH=/kibana
+      - SERVER_REWRITEBASEPATH=true
+    depends_on:
+      - elasticsearch
+    networks:
+      - internal_backend
+    labels:
+      - "traefik.enable=true"
+      - "traefik.http.routers.kibana.rule=PathPrefix(`/kibana`)"
+      - "traefik.http.routers.kibana.entrypoints=web"
+      - "traefik.http.routers.kibana.middlewares=kibana-strip"
+      - "traefik.http.middlewares.kibana-strip.stripprefix.prefixes=/kibana"
+      - "traefik.http.services.kibana.loadbalancer.server.port=5601"
+
+
+
   backend:
     build:
       context: ./backend
