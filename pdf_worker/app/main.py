@@ -69,7 +69,11 @@ def process_and_chunk_pdf(filename: str):
 
         cleaned_pages = clean_document_text(local_path)
 
+<<<<<<< HEAD
         chunks = chunk_text(cleaned_pages, chunk_sizes=[200, 400, 800, 1600])
+=======
+        chunked = chunk_text(cleaned_pages, chunk_sizes=[200, 400, 800, 1600])
+>>>>>>> 9e0a9819dfcc72453037ce06e5fcaf27479a3ba8
 
 
         return {
