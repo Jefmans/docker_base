@@ -57,3 +57,12 @@ class ImageMetadata(BaseModel):
     filename: str
     caption: str = ""
     embedding: List = None
+
+
+
+class TextChunkEmbedding(BaseModel):
+    chunk_size: int
+    chunk_index: int
+    text: str
+    pages: List[int]
+    embedding: List[float]
