@@ -1,6 +1,6 @@
 # from collections import defaultdict, Counter
 from typing import List #, Dict
-import fitz
+# import fitz
 from typing import List, Tuple, Set
 from rapidfuzz import fuzz
 

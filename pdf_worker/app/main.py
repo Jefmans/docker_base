@@ -8,7 +8,7 @@ from app.models import DocumentMetadata, ImageMetadata
 from typing import Optional, List
 from dataclasses import dataclass, asdict
 from app.utils.image_extraction import process_images_and_captions
-import fitz  # PyMuPDF
+# import fitz  # PyMuPDF
 from app.utils.cleaning.clean_text_pipeline import clean_document_text
 from app.utils.chunking import chunk_text_by_lengths
 
