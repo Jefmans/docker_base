@@ -134,8 +134,11 @@ services:
       - "traefik.enable=true"
       - "traefik.http.routers.kibana.rule=PathPrefix(`/kibana`)"
       - "traefik.http.routers.kibana.entrypoints=web"
-      - "traefik.http.routers.kibana.middlewares=kibana-strip"
+      - "traefik.http.routers.kibana.middlewares=kibana-redirect,kibana-strip"
       - "traefik.http.middlewares.kibana-strip.stripprefix.prefixes=/kibana"
+      - "traefik.http.middlewares.kibana-redirect.redirectregex.regex=^/kibana$$"
+      - "traefik.http.middlewares.kibana-redirect.redirectregex.replacement=/kibana/app/home"
+      - "traefik.http.middlewares.kibana-redirect.redirectregex.permanent=true"
       - "traefik.http.services.kibana.loadbalancer.server.port=5601"
 
 
