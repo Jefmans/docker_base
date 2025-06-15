@@ -69,15 +69,16 @@ def process_and_chunk_pdf(filename: str):
 
         cleaned_pages = clean_document_text(local_path)
 
-        chunked = chunk_text(cleaned_pages, chunk_sizes=[200, 400, 800, 1600])
+        chunks = chunk_text(cleaned_pages, chunk_sizes=[200, 400, 800, 1600])
 
 
         return {
             "status": "success",
-            "chunk_sizes": list(chunked.keys()),
-            "chunks": {k: [c["text"][:200] for c in v[:3]] for k, v in chunked.items()},
-            "page_count": len(cleaned_pages)
+            "chunk_sizes": list(set(c["chunk_size"] for c in chunks)),
+            "chunks": chunks,
+            "page_count": len(set(p for chunk in chunks for p in chunk["pages"]))
         }
+
 
     except Exception as e:
         raise HTTPException(status_code=500, detail=str(e))
