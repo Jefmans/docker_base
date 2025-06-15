@@ -1,7 +1,9 @@
-from openai import OpenAIEmbeddings  # or `from langchain_openai import OpenAIEmbeddings`
+from langchain_openai  import OpenAIEmbeddings  # or `from langchain_openai import OpenAIEmbeddings`
 from app.models import TextChunkEmbedding
 import os
 from dotenv import load_dotenv
+from typing import List
+
 
 load_dotenv()
 embedding_model = OpenAIEmbeddings(model="text-embedding-3-small", openai_api_key=os.getenv("OPENAI_API_KEY"))
