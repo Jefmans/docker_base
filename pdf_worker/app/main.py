@@ -13,6 +13,10 @@ from app.utils.cleaning.clean_text_pipeline import clean_document_text
 from app.utils.text_chunker import chunk_text
 
 
+from app.utils.cleaning.clean_text_pipeline import clean_document_text
+from app.utils.text_chunker import chunk_text
+from app.utils.embedding import embed_chunks
+from app.models import TextChunkEmbedding
 
 
 
@@ -79,6 +83,27 @@ def process_and_chunk_pdf(filename: str):
             "page_count": len(set(p for chunk in chunks for p in chunk["pages"]))
         }
 
+
+    except Exception as e:
+        raise HTTPException(status_code=500, detail=str(e))
+
+
+
+@app.post("/embed_chunks/{filename}", response_model=List[TextChunkEmbedding])
+def process_clean_embed_chunks(filename: str):
+    try:
+        local_path = download_from_minio(filename)
+
+        # Step 1: Clean
+        cleaned_pages = clean_document_text(local_path)
+
+        # Step 2: Chunk
+        chunks = chunk_text(cleaned_pages, chunk_sizes=[200, 400, 800, 1600])
+
+        # Step 3: Embed
+        embedded = embed_chunks(chunks)
+
+        return embedded
 
     except Exception as e:
         raise HTTPException(status_code=500, detail=str(e))
