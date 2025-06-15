@@ -9,6 +9,9 @@ from typing import Optional, List
 from dataclasses import dataclass, asdict
 from app.utils.image_extraction import process_images_and_captions
 import fitz  # PyMuPDF
+from app.utils.cleaning.clean_text_pipeline import clean_document_text
+from app.utils.chunking import chunk_text_by_lengths
+
 
 
 
@@ -56,3 +59,24 @@ def extract_images(filename: str):
     except Exception as e:
         raise HTTPException(status_code=500, detail=str(e))
 
+
+
+
+@app.post("/clean_chunks/{filename}")
+def process_and_chunk_pdf(filename: str):
+    try:
+        local_path = download_from_minio(filename)
+
+        cleaned_pages = clean_document_text(local_path)
+
+        chunked = chunk_text_by_lengths(cleaned_pages)
+
+        return {
+            "status": "success",
+            "chunk_sizes": list(chunked.keys()),
+            "chunks": {k: [c["text"][:200] for c in v[:3]] for k, v in chunked.items()},
+            "page_count": len(cleaned_pages)
+        }
+
+    except Exception as e:
+        raise HTTPException(status_code=500, detail=str(e))
