@@ -24,7 +24,7 @@ def roman_to_int(s):
             prev_value = value
     return result if result > 0 else None
 
-def detect_page_numbers(pages_text, n=3, min_sequence_len=4):
+def detect_page_numbers(pages_text, n=3, min_sequence_len=2):
     candidates = []  # list of dicts: {"index": int, "line": str, "pos": "top"/"bottom", "value": int}
     
     for idx, lines in enumerate(pages_text):
