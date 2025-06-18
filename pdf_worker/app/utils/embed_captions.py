@@ -1,7 +1,7 @@
 from typing import List
 from elasticsearch import Elasticsearch, helpers
 from langchain.embeddings import OpenAIEmbeddings
-from ..models.image_model import ImageMetadata  # Adjust import as needed
+from app.models import ImageMetadata  # Adjust import as needed
 import os
 
 # Initialize embedding model
