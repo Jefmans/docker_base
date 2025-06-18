@@ -111,3 +111,19 @@ def process_clean_embed_chunks(filename: str):
 
     except Exception as e:
         raise HTTPException(status_code=500, detail=str(e))
+
+
+from app.utils.pdf_pipeline import process_pdf
+
+@app.post("/process/full/{filename}")
+def full_pdf_pipeline(filename: str):
+    try:
+        local_path = download_from_minio(filename)
+        book_id = filename.split("_")[0]
+        process_pdf(local_path, book_id, filename)
+        return {
+            "status": "✅ done",
+            "filename": filename
+        }
+    except Exception as e:
+        raise HTTPException(status_code=500, detail=str(e))
