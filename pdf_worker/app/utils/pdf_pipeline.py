@@ -62,7 +62,7 @@ def process_pdf(file_path: str, book_id: str, source_pdf: str):
     embed_chunks_streaming(
         chunks,
         save_fn=lambda batch: save_chunks_to_es(source_pdf, batch),
-        batch_size=1  # or 10 for better throughput
+        # batch_size=1  # or 10 for better throughput
     )
 
     logger.info(f"--- 5 ---")
