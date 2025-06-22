@@ -4,7 +4,7 @@ from app.utils.image_extraction import process_images_and_captions
 from app.utils.cleaning.header_footer import collect_repeating_lines, remove_repeating_lines
 from app.utils.cleaning.page_numbers import detect_page_numbers, remove_page_numbers
 from app.utils.text_chunker import chunk_text
-from app.utils.embedding import embed_chunks, embed_chunks_streaming
+from app.utils.embedding import embed_chunks_streaming
 from app.utils.embed_captions import embed_and_store_captions
 from app.utils.es import save_chunks_to_es
 from app.models import ImageMetadata

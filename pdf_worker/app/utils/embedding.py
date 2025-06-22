@@ -25,7 +25,7 @@ encoding = tiktoken.encoding_for_model(MODEL)
 def estimate_tokens(text: str) -> int:
     return len(encoding.encode(text))
 
-def embed_chunks_streamed(chunks: List[dict], save_fn: Callable[[List[TextChunkEmbedding]], None]):
+def embed_chunks_streaming(chunks: List[dict], save_fn: Callable[[List[TextChunkEmbedding]], None]):
     logger.info(f"⚡ Embedding {len(chunks)} chunks in token-capped batches")
 
     current_batch = []
