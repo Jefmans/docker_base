@@ -6,6 +6,10 @@ from dotenv import load_dotenv
 from langchain.prompts import PromptTemplate
 from app.models import DocumentMetadata
 
+import logging
+logging.basicConfig(level=logging.INFO)
+logger = logging.getLogger(__name__)
+
 
 
 # --- Metadata Extraction ---
@@ -23,6 +27,12 @@ def get_doc_info(file_path):
         text = doc[i].get_text()
         candidate_pages.append(text)
     combined_text = "\n---\n".join(candidate_pages)
+
+
+    logger.info(f"[get_doc_info] Pages selected: {page_indices}")
+    logger.info(f"[get_doc_info] Combined text length: {len(combined_text)} characters")
+    logger.info(f"[get_doc_info] Approx. token count: {len(combined_text) // 4} tokens")
+
 
     # Load API key
     load_dotenv()

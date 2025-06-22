@@ -10,6 +10,8 @@ from app.utils.es import save_chunks_to_es
 from app.models import ImageMetadata
 
 
+
+
 def process_pdf(file_path: str, book_id: str, source_pdf: str):
     print(f"📘 Starting full processing for: {source_pdf}")
 
@@ -17,6 +19,8 @@ def process_pdf(file_path: str, book_id: str, source_pdf: str):
     doc = fitz.open(file_path)
     # pages_text = [page.get_text().splitlines() for page in doc]
     pages_text = [page.get_text().splitlines() for page in doc[59:62]]
+
+
 
     # Step 2: Extract and save images + captions
     page_range = list(range(len(doc)))  # You may restrict this if needed
@@ -46,7 +50,8 @@ def process_pdf(file_path: str, book_id: str, source_pdf: str):
 
     # Step 6: Normalize and chunk text
     cleaned_pages = ["\n".join(lines) for lines in pages_text]
-    chunks = chunk_text(cleaned_pages, chunk_sizes=[200, 400, 800, 1600])
+    # chunks = chunk_text(cleaned_pages, chunk_sizes=[200, 400, 800, 1600])
+    chunks = chunk_text(cleaned_pages, chunk_sizes=[400, 800])
 
     # Step 7: Embed and save text chunks
     embedded_chunks = embed_chunks(chunks)
