@@ -54,8 +54,8 @@ def process_pdf(file_path: str, book_id: str, source_pdf: str):
     logger.info(f"--- 3 ---")
     # Step 6: Normalize and chunk text
     cleaned_pages = ["\n".join(lines) for lines in pages_text]
-    # chunks = chunk_text(cleaned_pages, chunk_sizes=[200, 400, 800, 1600])
-    chunks = chunk_text(cleaned_pages, chunk_sizes=[400, 800])
+    chunks = chunk_text(cleaned_pages, chunk_sizes=[200, 400, 800, 1600])
+    # chunks = chunk_text(cleaned_pages, chunk_sizes=[400, 800])
     logger.info(f"--- 4 ---")
     # Step 7: Embed and save text chunks
     embedded_chunks = embed_chunks(chunks)
