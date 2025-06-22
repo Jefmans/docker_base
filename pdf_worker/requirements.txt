@@ -10,3 +10,4 @@ pydantic
 Pillow
 rapidfuzz
 elasticsearch==8.12.1
+tiktoken
