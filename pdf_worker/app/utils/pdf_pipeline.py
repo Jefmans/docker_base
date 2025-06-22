@@ -4,7 +4,7 @@ from app.utils.image_extraction import process_images_and_captions
 from app.utils.cleaning.header_footer import collect_repeating_lines, remove_repeating_lines
 from app.utils.cleaning.page_numbers import detect_page_numbers, remove_page_numbers
 from app.utils.text_chunker import chunk_text
-from app.utils.embedding import embed_chunks
+from app.utils.embedding import embed_chunks, embed_chunks_streaming
 from app.utils.embed_captions import embed_and_store_captions
 from app.utils.es import save_chunks_to_es
 from app.models import ImageMetadata
@@ -58,9 +58,16 @@ def process_pdf(file_path: str, book_id: str, source_pdf: str):
     # chunks = chunk_text(cleaned_pages, chunk_sizes=[400, 800])
     logger.info(f"--- 4 ---")
     # Step 7: Embed and save text chunks
-    embedded_chunks = embed_chunks(chunks)
-    save_chunks_to_es(source_pdf, embedded_chunks)
+    # embedded_chunks = embed_chunks(chunks)
+    embed_chunks_streaming(
+        chunks,
+        save_fn=lambda batch: save_chunks_to_es(source_pdf, batch),
+        batch_size=1  # or 10 for better throughput
+    )
+
     logger.info(f"--- 5 ---")
+    # save_chunks_to_es(source_pdf, embedded_chunks)
+    # logger.info(f"--- 6 ---")
     # Step 8: Embed and save captions
     embed_and_store_captions(image_records)
 
