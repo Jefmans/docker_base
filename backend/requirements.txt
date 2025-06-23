@@ -9,4 +9,6 @@ pymupdf
 langchain-openai
 langchain_community
 elasticsearch==8.12.1
-langchain-elasticsearch
+langchain==0.1.17
+langchain-core==0.1.47
+langchain-elasticsearch==0.1.7
