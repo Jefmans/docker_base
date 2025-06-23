@@ -6,3 +6,5 @@ minio
 python-multipart
 requests
 pymupdf
+langchain-openai
+elasticsearch
