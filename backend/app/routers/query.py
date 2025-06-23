@@ -1,7 +1,7 @@
 from fastapi import APIRouter, HTTPException
 from pydantic import BaseModel
 from typing import List, Optional
-from elasticsearch import Elasticsearch
+from elasticsearch import Elasticsearch, RequestsHttpConnection
 from langchain_openai import OpenAIEmbeddings, ChatOpenAI
 import os
 import logging
@@ -20,10 +20,13 @@ logger = logging.getLogger(__name__)
 # es = Elasticsearch("http://elasticsearch:9200")
 
 
+
 es = Elasticsearch(
     hosts=["http://elasticsearch:9200"],
+    connection_class=RequestsHttpConnection,
     headers={"Accept": "application/vnd.elasticsearch+json; compatible-with=8"}
 )
+
 
 
 embedding_model = OpenAIEmbeddings(
