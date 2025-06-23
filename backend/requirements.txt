@@ -8,4 +8,4 @@ requests
 pymupdf
 langchain-openai
 langchain_community
-elasticsearch
+elasticsearch==8.12.1
