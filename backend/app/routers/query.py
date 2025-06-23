@@ -17,7 +17,7 @@ embedding_model = OpenAIEmbeddings(
 # Vector store
 vectorstore = ElasticsearchStore(
     es_connection=es,
-    index_name="your-index-name",  # Replace with your real index
+    index_name="pdf_chunks",  # Replace with your real index
     embedding=embedding_model,
 )
 
