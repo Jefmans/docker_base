@@ -5,6 +5,9 @@ from elasticsearch import Elasticsearch
 from langchain_openai import OpenAIEmbeddings, ChatOpenAI
 import os
 import logging
+from dotenv import load_dotenv
+
+load_dotenv()
 
 router = APIRouter()
 logger = logging.getLogger(__name__)
