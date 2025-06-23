@@ -16,7 +16,15 @@ logger = logging.getLogger(__name__)
 
 # === Configuration ===
 # ES_URL = os.getenv("ELASTICSEARCH_HOST", "http://elasticsearch:9200")
-es = Elasticsearch(hosts=[os.getenv("ELASTICSEARCH_HOST", "http://elasticsearch:9200")])
+# es = Elasticsearch(hosts=[os.getenv("ELASTICSEARCH_HOST", "http://elasticsearch:9200")])
+# es = Elasticsearch("http://elasticsearch:9200")
+
+
+es = Elasticsearch(
+    hosts=["http://elasticsearch:9200"],
+    headers={"Accept": "application/vnd.elasticsearch+json; compatible-with=8"}
+)
+
 
 embedding_model = OpenAIEmbeddings(
     model="text-embedding-3-small",
@@ -25,7 +33,6 @@ embedding_model = OpenAIEmbeddings(
 
 
 llm = ChatOpenAI(model="gpt-4o-mini", temperature=0, openai_api_key=os.getenv("OPENAI_API_KEY"))
-# es = Elasticsearch(ES_URL)
 
 CHUNK_INDEX = "pdf_chunks"
 CAPTION_INDEX = "captions"
