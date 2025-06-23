@@ -13,10 +13,17 @@ router = APIRouter()
 logger = logging.getLogger(__name__)
 
 # === Configuration ===
-ES_URL = os.getenv("ELASTICSEARCH_HOST", "http://elasticsearch:9200")
-embedding_model = OpenAIEmbeddings(model="text-embedding-3-small", openai_api_key=os.getenv("OPENAI_API_KEY"))
+# ES_URL = os.getenv("ELASTICSEARCH_HOST", "http://elasticsearch:9200")
+es = Elasticsearch(hosts=[os.getenv("ELASTICSEARCH_HOST", "http://elasticsearch:9200")])
+
+embedding_model = OpenAIEmbeddings(
+    model=MODEL,
+    openai_api_key=os.getenv("OPENAI_API_KEY")
+)
+
+
 llm = ChatOpenAI(model="gpt-4o-mini", temperature=0, openai_api_key=os.getenv("OPENAI_API_KEY"))
-es = Elasticsearch(ES_URL)
+# es = Elasticsearch(ES_URL)
 
 CHUNK_INDEX = "pdf_chunks"
 CAPTION_INDEX = "captions"
