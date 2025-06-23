@@ -1,9 +1,11 @@
 import os
 from fastapi import APIRouter, HTTPException
 from pydantic import BaseModel
-from langchain_community.vectorstores import ElasticsearchStore
+# from langchain_community.vectorstores import ElasticsearchStore
 from langchain_openai import OpenAIEmbeddings
 from elasticsearch import Elasticsearch
+from langchain_elasticsearch import ElasticsearchStore
+
 
 # Elasticsearch connection
 es = Elasticsearch("http://elasticsearch:9200")
