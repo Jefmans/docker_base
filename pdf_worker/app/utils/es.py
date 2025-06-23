@@ -33,7 +33,7 @@ def save_chunks_to_es(filename: str, chunks: list):
             "chunk_index": chunk.chunk_index,
             "pages": chunk.pages,
             "text": chunk.text,
-            "embedding": chunk.embedding
+            "vector": chunk.embedding
         }
         doc_id = f"{filename}_{chunk.chunk_size}_{chunk.chunk_index}"
         es.index(index=INDEX_NAME, id=doc_id, document=doc)
