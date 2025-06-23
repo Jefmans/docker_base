@@ -14,7 +14,7 @@ def ensure_index():
                 "chunk_index": {"type": "integer"},
                 "pages": {"type": "integer"},
                 "text": {"type": "text"},
-                "embedding": {
+                "vector": {
                     "type": "dense_vector",
                     "dims": 1536,  # adjust to match your embedding model
                     "index": True,
