@@ -7,4 +7,5 @@ python-multipart
 requests
 pymupdf
 langchain-openai
+langchain_community
 elasticsearch
