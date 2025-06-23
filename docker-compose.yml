@@ -143,6 +143,8 @@ services:
 
 
   backend:
+    env_file:
+      - .env
     build:
       context: ./backend
     container_name: backend
