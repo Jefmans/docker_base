@@ -21,7 +21,7 @@ vectorstore = ElasticsearchStore(
     es_connection=es,
     index_name="pdf_chunks",  # Replace with your real index
     embedding=embedding_model,
-    # vector_field="embedding",  # ← this must match your ES field name
+    vector_field="embedding",  # ← this must match your ES field name
 )
 
 # FastAPI router
