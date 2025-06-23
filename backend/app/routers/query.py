@@ -7,6 +7,8 @@ import os
 import logging
 from dotenv import load_dotenv
 
+
+
 load_dotenv()
 
 router = APIRouter()
@@ -17,7 +19,7 @@ logger = logging.getLogger(__name__)
 es = Elasticsearch(hosts=[os.getenv("ELASTICSEARCH_HOST", "http://elasticsearch:9200")])
 
 embedding_model = OpenAIEmbeddings(
-    model=MODEL,
+    model="text-embedding-3-small",
     openai_api_key=os.getenv("OPENAI_API_KEY")
 )
 
