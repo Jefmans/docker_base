@@ -15,7 +15,7 @@ from app.utils.cleaning.clean_text_pipeline import clean_document_text
 
 # from app.utils.cleaning.clean_text_pipeline import clean_document_text
 from app.utils.text_chunker import chunk_text
-# from app.utils.embedding import embed_chunks
+from app.utils.embedding import embed_chunks
 from app.models import TextChunkEmbedding
 from app.utils.es import save_chunks_to_es
 
