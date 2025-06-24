@@ -99,7 +99,8 @@ def process_clean_embed_chunks(filename: str):
         cleaned_pages = clean_document_text(local_path)
 
         # Step 2: Chunk
-        chunks = chunk_text(cleaned_pages, chunk_sizes=[200, 400, 800, 1600])
+        # chunks = chunk_text(cleaned_pages, chunk_sizes=[200, 400, 800, 1600])
+        chunks = chunk_text(cleaned_pages, chunk_sizes=[800, 1600])
 
         # Step 3: Embed
         embedded = embed_chunks(chunks)
