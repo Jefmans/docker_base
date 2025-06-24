@@ -20,8 +20,8 @@ def process_pdf(file_path: str, book_id: str, source_pdf: str):
 
     # Step 1: Load PDF
     doc = fitz.open(file_path)
-    pages_text = [page.get_text().splitlines() for page in doc]
-    # pages_text = [page.get_text().splitlines() for page in doc[59:62]]
+    # pages_text = [page.get_text().splitlines() for page in doc]
+    pages_text = [page.get_text().splitlines() for page in doc[59:62]]
 
 
 
