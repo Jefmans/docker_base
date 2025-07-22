@@ -6,7 +6,7 @@
 # python-multipart
 # requests
 # pymupdf
-# langchain
+langchain
 # langchain-elasticsearch==0.1.3 
 langchain-core
 langchain-openai
@@ -21,7 +21,7 @@ python-multipart
 requests
 pymupdf
 
-langchain==0.1.13
+# langchain==0.1.13
 # langchain-openai==0.1.3
 langchain-elasticsearch==0.1.3
 elasticsearch==8.12.1
