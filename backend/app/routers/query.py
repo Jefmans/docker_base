@@ -24,6 +24,12 @@ vectorstore = ElasticsearchStore(
     # vector_field="embedding",  # ← this must match your ES field name
 )
 
+caption_store = ElasticsearchStore(
+    es_connection=es,
+    index_name="captions",
+    embedding=embedding_model,
+)
+
 # FastAPI router
 router = APIRouter()
 
@@ -33,13 +39,38 @@ class QueryRequest(BaseModel):
     top_k: int = 5
 
 # Route
+# @router.post("/query/")
+# async def query(request: QueryRequest):
+#     try:
+#         results = vectorstore.similarity_search(
+#             query=request.query,
+#             k=request.top_k
+#         )
+#         return {"results": [r.page_content for r in results]}
+#     except Exception as e:
+#         raise HTTPException(status_code=500, detail=f"❌ Query error: {str(e)}")
 @router.post("/query/")
 async def query(request: QueryRequest):
     try:
-        results = vectorstore.similarity_search(
-            query=request.query,
-            k=request.top_k
-        )
-        return {"results": [r.page_content for r in results]}
+        text_results = vectorstore.similarity_search(query=request.query, k=request.top_k)
+        caption_results = caption_store.similarity_search(query=request.query, k=request.top_k)
+
+        return {
+            "text_chunks": [
+                {
+                    "text": r[0].page_content,
+                    "score": r[1],
+                    "metadata": r[0].metadata  # contains filename, pages, chunk_index etc.
+                }
+                for r in text_results
+            ],
+            "captions": [
+                {
+                    "caption": r.page_content,
+                    "metadata": r.metadata  # will include minio_path
+                }
+                for r in caption_results
+            ]
+        }
     except Exception as e:
         raise HTTPException(status_code=500, detail=f"❌ Query error: {str(e)}")

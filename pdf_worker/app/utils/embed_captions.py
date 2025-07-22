@@ -3,6 +3,8 @@ from elasticsearch import Elasticsearch, helpers
 from langchain.embeddings import OpenAIEmbeddings
 from app.models import ImageMetadata  # Adjust import as needed
 import os
+from urllib.parse import quote
+
 
 # Initialize embedding model
 embedding_model = OpenAIEmbeddings(openai_api_key=os.getenv("OPENAI_API_KEY"))
@@ -26,6 +28,10 @@ def embed_and_store_captions(records: List[ImageMetadata], index_name: str = "ca
     payloads = []
     for record, embedding in zip(valid_records, embeddings):
         doc_id = f"{record.book_id}_{record.page_number}_{record.xref}"
+        filename = record.filename
+
+        minio_path = f"/minio/images/{quote(filename)}"  # or construct full URL if frontend needed
+
         payloads.append({
             "_index": index_name,
             "_id": doc_id,
@@ -35,7 +41,9 @@ def embed_and_store_captions(records: List[ImageMetadata], index_name: str = "ca
                 "caption": record.caption,
                 "embedding": embedding,
                 "source_pdf": record.source_pdf,
-                "xref": record.xref
+                "xref": record.xref,
+                "filename": filename,
+                "minio_path": minio_path
             }
         })
 

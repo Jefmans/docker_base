@@ -42,7 +42,8 @@ def process_pdf(file_path: str, book_id: str, source_pdf: str):
                 ])
 
     # Step 4: Chunk the cleaned text
-    chunks = chunk_text(cleaned_pages, chunk_sizes=[200, 400, 800, 1600])
+    # chunks = chunk_text(cleaned_pages, chunk_sizes=[200, 400, 800, 1600])
+    chunks = chunk_text(cleaned_pages, chunk_sizes=[400, 1600])
     logger.info(f"🔖 Total chunks created: {len(chunks)}")
 
     # Step 5: Embed and save chunks
