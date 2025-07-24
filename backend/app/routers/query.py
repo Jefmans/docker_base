@@ -62,7 +62,7 @@ async def query(request: QueryRequest):
                     # "text": r.page_content,
                     # "score": score,
                     # "pages": r.pages  # contains filename, pages, chunk_index etc.
-                    r
+                    "r" : r
                 }
                 for r  in text_results
             ],
@@ -71,7 +71,7 @@ async def query(request: QueryRequest):
                     # "caption": r.caption,
                     # "score": score,
                     # "metadata": r.metadata  # will include minio_path
-                    r
+                    "r" : r
                 }
                 for r  in caption_results
             ]
