@@ -60,14 +60,15 @@ async def query(request: QueryRequest):
             "text_chunks": [
                 {
                     "text": r.page_content,
-                    # "score": r.score,
-                    "metadata": r.metadata  # contains filename, pages, chunk_index etc.
+                    "score": r._score,
+                    "pages": r.pages  # contains filename, pages, chunk_index etc.
                 }
                 for r in text_results
             ],
             "captions": [
                 {
-                    "caption": r.page_content,
+                    "caption": r.caption,
+                    "score": r._score,
                     "metadata": r.metadata  # will include minio_path
                 }
                 for r in caption_results
