@@ -59,19 +59,21 @@ async def query(request: QueryRequest):
         return {
             "text_chunks": [
                 {
-                    "text": r.page_content,
-                    "score": score,
-                    "pages": r.pages  # contains filename, pages, chunk_index etc.
+                    # "text": r.page_content,
+                    # "score": score,
+                    # "pages": r.pages  # contains filename, pages, chunk_index etc.
+                    r
                 }
-                for r,score  in text_results
+                for r  in text_results
             ],
             "captions": [
                 {
-                    "caption": r.caption,
-                    "score": score,
-                    "metadata": r.metadata  # will include minio_path
+                    # "caption": r.caption,
+                    # "score": score,
+                    # "metadata": r.metadata  # will include minio_path
+                    r
                 }
-                for r, score  in caption_results
+                for r  in caption_results
             ]
         }
     except Exception as e:
