@@ -53,25 +53,25 @@ class QueryRequest(BaseModel):
 @router.post("/query/")
 async def query(request: QueryRequest):
     try:
-        text_results = vectorstore.similarity_search(query=request.query, k=request.top_k)
-        caption_results = caption_store.similarity_search(query=request.query, k=request.top_k)
+        text_results = vectorstore.similarity_search_with_score(query=request.query, k=request.top_k)
+        caption_results = caption_store.similarity_search_with_score(query=request.query, k=request.top_k)
 
         return {
             "text_chunks": [
                 {
                     "text": r.page_content,
-                    "score": r._score,
+                    "score": score,
                     "pages": r.pages  # contains filename, pages, chunk_index etc.
                 }
-                for r in text_results
+                for r,score  in text_results
             ],
             "captions": [
                 {
                     "caption": r.caption,
-                    "score": r._score,
+                    "score": score,
                     "metadata": r.metadata  # will include minio_path
                 }
-                for r in caption_results
+                for r, score  in caption_results
             ]
         }
     except Exception as e:
