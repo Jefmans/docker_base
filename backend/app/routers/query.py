@@ -59,9 +59,9 @@ async def query(request: QueryRequest):
         return {
             "text_chunks": [
                 {
-                    "text": r[0].page_content,
-                    "score": r[1],
-                    "metadata": r[0].metadata  # contains filename, pages, chunk_index etc.
+                    "text": r.page_content,
+                    # "score": r.score,
+                    "metadata": r.metadata  # contains filename, pages, chunk_index etc.
                 }
                 for r in text_results
             ],
