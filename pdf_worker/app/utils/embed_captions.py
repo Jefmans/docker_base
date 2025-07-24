@@ -28,9 +28,9 @@ def embed_and_store_captions(records: List[ImageMetadata], index_name: str = "ca
     payloads = []
     for record, embedding in zip(valid_records, embeddings):
         doc_id = f"{record.book_id}_{record.page_number}_{record.xref}"
-        filename = record.filename
+        # filename = record.filename
 
-        minio_path = f"/minio/images/{quote(filename)}"  # or construct full URL if frontend needed
+        # minio_path = f"/minio/images/{quote(filename)}"  # or construct full URL if frontend needed
 
         payloads.append({
             "_index": index_name,
@@ -39,11 +39,11 @@ def embed_and_store_captions(records: List[ImageMetadata], index_name: str = "ca
                 "book_id": record.book_id,
                 "page_number": record.page_number,
                 "caption": record.caption,
-                "embedding": embedding,
+                # "embedding": embedding,
+                "vector": embedding,
                 "source_pdf": record.source_pdf,
                 "xref": record.xref,
-                "filename": filename,
-                "minio_path": minio_path
+                "filename": record.filename,
             }
         })
 
