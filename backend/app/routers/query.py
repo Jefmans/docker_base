@@ -28,6 +28,7 @@ caption_store = ElasticsearchStore(
     es_connection=es,
     index_name="captions",
     embedding=embedding_model,
+    vector_field="embedding",
 )
 
 # FastAPI router
