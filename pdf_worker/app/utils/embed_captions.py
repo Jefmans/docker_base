@@ -38,7 +38,7 @@ def embed_and_store_captions(records: List[ImageMetadata], index_name: str = "ca
             "_source": {
                 "book_id": record.book_id,
                 "page_number": record.page_number,
-                "caption": record.caption,
+                "text": record.caption,
                 # "embedding": embedding,
                 "vector": embedding,
                 "source_pdf": record.source_pdf,
