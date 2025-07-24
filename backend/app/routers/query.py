@@ -78,3 +78,5 @@ async def query(request: QueryRequest):
         }
     except Exception as e:
         raise HTTPException(status_code=500, detail=f"❌ Query error: {str(e)}")
+
+

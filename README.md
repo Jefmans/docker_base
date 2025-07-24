@@ -16,3 +16,5 @@ TO DO
 
 
 3) it is possible to upload the same file twice
+
+4) Update Embedding Upload in Elastic to add "metadata = {}" => to be able to access other fiels like "pages, ..."
