@@ -2,20 +2,25 @@ from fastapi import APIRouter, Request, HTTPException
 from uuid import uuid4
 from app.utils.agent.search_chunks import search_chunks_for_query
 from app.utils.agent.memory import save_session_chunks
+from pydantic import BaseModel
+
 
 router = APIRouter()
 
+class AgentQueryRequest(BaseModel):
+    query: str
+    top_k: int = 5
+
 @router.post("/agent/query")
-async def start_query_session(request: Request):
-    body = await request.json()
-    user_query = body.get("query", "")
+async def start_query_session(request: AgentQueryRequest):
+    user_query = request.query
 
     if not user_query:
         raise HTTPException(status_code=400, detail="Missing 'query' in request body.")
 
     try:
         # Search chunks in Elastic
-        top_chunks = search_chunks_for_query(user_query, top_k=100)
+        top_chunks = search_chunks_for_query(user_query, top_k=request.top_k)
 
         # Save in a new session
         session_id = str(uuid4())
