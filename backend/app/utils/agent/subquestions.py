@@ -1,5 +1,6 @@
 from typing import List
 from langchain_openai import ChatOpenAI
+import json
 
 def generate_subquestions_from_chunks(chunks: List[str], user_query: str, model_name: str = "gpt-4o") -> str:
     llm = ChatOpenAI(model=model_name, temperature=0)
@@ -20,4 +21,10 @@ Respond with a JSON array of strings.
 """
 
     response = llm.invoke(prompt)
-    return response.content.strip()
+
+
+
+    try:
+        return json.loads(response.content.strip())
+    except:
+        return [line.strip("- ") for line in response.content.strip().split("\n") if line.strip()]

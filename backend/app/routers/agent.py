@@ -40,3 +40,41 @@ async def start_query_session(request: AgentQueryRequest):
 
     except Exception as e:
         raise HTTPException(status_code=500, detail=str(e))
+
+
+from app.utils.agent.memory import get_session_chunks
+from app.utils.agent.subquestions import generate_subquestions_from_chunks
+
+@router.post("/agent/subquestions")
+def generate_subquestions(session_id: str):
+    session = get_session_chunks(session_id)
+    if not session:
+        raise HTTPException(status_code=404, detail="Session not found")
+
+    query = session["query"]
+    chunks = session["chunks"]
+    subq = generate_subquestions_from_chunks(chunks, query)
+
+    return {
+        "session_id": session_id,
+        "query": query,
+        "subquestions": subq
+    }
+
+
+from app.utils.agent.outline import generate_outline
+
+@router.post("/agent/outline")
+def create_outline(session_id: str):
+    session = get_session_chunks(session_id)
+    if not session or "query" not in session or "chunks" not in session:
+        raise HTTPException(status_code=404, detail="Session not found")
+
+    # First call subquestion generator again (or reuse previous result)
+    subq = generate_subquestions_from_chunks(session["chunks"], session["query"])
+    outline = generate_outline(subq, session["query"])
+
+    return {
+        "session_id": session_id,
+        "outline": outline
+    }
