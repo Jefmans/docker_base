@@ -1,36 +1,23 @@
-from langchain_openai import ChatOpenAI
-from app.utils.agent.memory import get_session_chunks, get_all_sections
 from app.utils.agent.outline import Outline
 import json
-
-llm = ChatOpenAI(model="gpt-4o", temperature=0)
 
 def finalize_article(session_data: dict) -> str:
     if "outline" not in session_data or "query" not in session_data:
         return "❌ Missing outline or query."
 
     outline = Outline(**session_data["outline"]) if isinstance(session_data["outline"], dict) else Outline(**json.loads(session_data["outline"]))
-    sections = get_all_sections(session_data["session_id"])
+    session_id = session_data["session_id"]
+    all_sections = session_data.get("sections") or {}
 
-    if not sections:
-        return "❌ No sections found to finalize."
+    stitched = f"# {outline.title}\n\n"
+    stitched += f"**Abstract:** {outline.abstract}\n\n"
 
-    joined_sections = "\n\n".join(sections)
+    for i, section in enumerate(outline.sections):
+        text = all_sections.get(i, "").strip()
+        if not text:
+            continue
+        stitched += f"## {section.heading}\n\n{text}\n\n"
 
-    prompt = f"""
-You are a scientific editor. Combine the following article data into a polished, structured scientific article.
+    stitched += "## Conclusion\n\n(Conclusion not generated. Add manually if needed.)"
 
-=== TITLE ===
-{outline.title}
-
-=== ABSTRACT ===
-{outline.abstract}
-
-=== SECTIONS ===
-{joined_sections}
-
-=== GOAL ===
-We want a logically flowing, coherent, well-written article using only the content above. Add intro/conclusion/transitions if missing. Keep it formal and academic.
-"""
-
-    return llm.invoke(prompt).content.strip()
+    return stitched.strip()
