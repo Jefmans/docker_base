@@ -79,7 +79,8 @@ def create_outline(session_id: str):
     }
 
 
-from app.utils.agent.writer import write_section, save_section
+from app.utils.agent.writer import write_section
+from app.utils.agent.memory import save_section
 from app.utils.agent.outline import Outline  # Pydantic model
 import json
 
