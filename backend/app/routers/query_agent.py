@@ -109,6 +109,8 @@ async def query_agent(request: AgentQueryRequest):
         return {
             "query": request.query,
             "initial_answer": initial_answer,
+            "chunks": chunks,
+            "captions": captions, 
             "sub_questions": sub_questions,
             "sub_answers": sub_answers,
             "final_answer": final_answer

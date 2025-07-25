@@ -1,5 +1,5 @@
 from fastapi import FastAPI
-from app.routers import health, upload, extract, process, query, query_agent
+from app.routers import health, upload, extract, process, query, query_agent, agent
 from app.db import Base, engine  # Ensure engine is correctly configured
 
 # Auto-create tables
@@ -22,3 +22,4 @@ app.include_router(extract.router)
 app.include_router(process.router)
 app.include_router(query.router)
 app.include_router(query_agent.router)
+app.include_router(agent.router)
