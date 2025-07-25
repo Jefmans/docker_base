@@ -1,4 +1,5 @@
-from langchain.vectorstores import ElasticsearchStore
+# from langchain.vectorstores import ElasticsearchStore
+from langchain_community.vectorstores import ElasticsearchStore
 # from langchain.embeddings import OpenAIEmbeddings
 from langchain_community.embeddings import OpenAIEmbeddings
 from elasticsearch import Elasticsearch
