@@ -6,8 +6,7 @@ from elasticsearch import Elasticsearch
 import os
 
 def get_vectorstore(index_name: str = "pdf_chunks") -> ElasticsearchStore:
-    es_client = Elasticsearch(
-        hosts=[os.environ.get("ELASTIC_HOST", "http://elasticsearch:9200")],
+    es_client = Elasticsearch(os.environ.get("ELASTIC_HOST", "http://elasticsearch:9200")
         # basic_auth=(
         #     os.environ.get("ELASTIC_USER", ""),
         #     os.environ.get("ELASTIC_PASSWORD", "")
@@ -15,10 +14,13 @@ def get_vectorstore(index_name: str = "pdf_chunks") -> ElasticsearchStore:
         # verify_certs=False
     )
 
-    embeddings = OpenAIEmbeddings(model="text-embedding-3-small")
+    embedding_model = OpenAIEmbeddings(
+                model="text-embedding-3-small",
+                openai_api_key=os.getenv("OPENAI_API_KEY"),
+            )
 
     return ElasticsearchStore(
         index_name=index_name,
-        embedding=embeddings,
+        embedding=embedding_model,
         es_connection=es_client
     )
