@@ -1,0 +1,206 @@
+Great point. You're right to pause here — **the agent should be query-driven**, not file-driven.
+
+Let’s rebuild the full project outline for your **evidence-grounded agent system**, step by step, based on your real goals:
+
+---
+
+## 🧠 **Goal Recap**
+
+You’re building a scientific chat agent that:
+
+1. Accepts a user query.
+2. Answers it by retrieving relevant text chunks (elastic).
+3. Generates grounded subquestions and possibly deeper levels.
+4. Builds a logical outline.
+5. Writes sections based on those chunks.
+6. Synthesizes a full article.
+
+---
+
+## ✅ Revised Project Architecture: Step-by-Step
+
+---
+
+### ### STEP 1: `POST /agent/query`
+
+📍 **Main entry point**
+This starts the flow: the user provides a query.
+
+#### Input:
+
+```json
+{
+  "query": "What is a black hole?"
+}
+```
+
+#### What it does:
+
+1. 🔍 Searches **all indexed PDF chunks** in Elasticsearch (across all files)
+2. 📦 Collects \~100 most relevant chunks → becomes the **working corpus**
+3. 🔧 Saves session state (query + top chunks)
+
+#### Result:
+
+Returns a session ID and some preview of retrieved content.
+
+---
+
+### ### STEP 2: `POST /agent/subquestions`
+
+🔁 Follows from Step 1 — now we dig deeper.
+
+#### Input:
+
+```json
+{
+  "session_id": "abc123"
+}
+```
+
+#### What it does:
+
+1. 🧠 Takes top chunks from Step 1
+2. 🤖 Generates 5–10 **L1 subquestions**, using **only the retrieved chunks**
+3. 📦 Optionally, for each L1: generates L2 subquestions
+
+#### Result:
+
+Returns a tree of questions:
+
+```json
+{
+  "What is a black hole?": [
+    "What are the types of black holes?",
+    "How are they detected?",
+    ...
+  ]
+}
+```
+
+---
+
+### ### STEP 3: `POST /agent/outline`
+
+🧱 Build the skeleton of the article.
+
+#### Input:
+
+```json
+{
+  "session_id": "abc123"
+}
+```
+
+#### What it does:
+
+1. 📚 Uses the subquestions + top chunks
+2. 📑 Generates:
+
+   * Title
+   * Abstract
+   * Section headings
+   * Goals per section
+   * Which questions go where
+
+#### Result:
+
+```json
+{
+  "outline": {
+    "title": "...",
+    "abstract": "...",
+    "sections": [
+      {
+        "heading": "Formation of Black Holes",
+        "goals": "...",
+        "questions": [...]
+      },
+      ...
+    ]
+  }
+}
+```
+
+---
+
+### ### STEP 4: `POST /agent/section/{section_id}`
+
+✍️ Writes the actual scientific content.
+
+#### Input:
+
+```json
+{
+  "session_id": "abc123",
+  "section_id": "2"
+}
+```
+
+#### What it does:
+
+1. Retrieves all chunks relevant to this section’s questions
+2. Generates the full section text, based only on those chunks
+
+---
+
+### ### STEP 5: `POST /agent/article/finalize`
+
+🧵 Final stitching and review.
+
+#### Input:
+
+```json
+{ "session_id": "abc123" }
+```
+
+#### What it does:
+
+* Combines all written sections
+* Generates:
+
+  * Introduction + transitions
+  * Final polish
+  * References (if stored)
+
+---
+
+## ✅ Summary: Routes and Responsibilities
+
+| Endpoint                  | Purpose                    | Inputs                   | Outputs              |
+| ------------------------- | -------------------------- | ------------------------ | -------------------- |
+| `/agent/query`            | Start the research session | `{ query }`              | `session_id`, chunks |
+| `/agent/subquestions`     | Generate subquestions      | `session_id`             | tree of subquestions |
+| `/agent/outline`          | Build article structure    | `session_id`             | outline object       |
+| `/agent/section/{id}`     | Write section              | `session_id`, section id | section text         |
+| `/agent/article/finalize` | Merge + polish             | `session_id`             | full article         |
+
+---
+
+## 📁 Suggested Folder Structure
+
+```
+backend/
+└── app/
+    ├── routers/
+    │   └── agent.py  ← All endpoints above
+    ├── utils/
+    │   └── agent/
+    │       ├── search_chunks.py
+    │       ├── subquestions.py
+    │       ├── outline.py
+    │       ├── writer.py
+    │       └── memory.py  ← Tracks session state (in-memory or Redis)
+```
+
+---
+
+## 🔜 Next
+
+Would you like to begin with:
+
+1. Building `/agent/query` (start search + session)
+2. Designing the `session_state` system (just a global dict for now?)
+3. Testing the full flow locally via curl or Postman?
+
+We can proceed step by step.

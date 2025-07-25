@@ -7,18 +7,18 @@ import logging
 
 
 logger = logging.getLogger(__name__)
-
+logger.info("START")
 
 router = APIRouter()
 
 class AgentQueryRequest(BaseModel):
-    query: str
+    query: str = "What is a black hole ?"
     top_k: int = 5
 
 @router.post("/agent/query")
 async def start_query_session(request: AgentQueryRequest):
     user_query = request.query
-    logger.info(f"{request}")
+    logger.info("HELLO WORLD")
 
     if not user_query:
         raise HTTPException(status_code=400, detail="Missing 'query' in request body.")
