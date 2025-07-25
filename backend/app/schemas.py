@@ -12,4 +12,4 @@ class ImageMetadata(BaseModel):
     embedding: Optional[List[float]] = None  # Optional for later use
 
     class Config:
-        orm_mode = True  # This allows converting ORM objects to Pydantic
+        from_attributes = True

@@ -15,6 +15,8 @@ def finalize_article(session_data: dict) -> str:
     if not sections:
         return "❌ No sections found to finalize."
 
+    joined_sections = "\n\n".join(sections)
+
     prompt = f"""
 You are a scientific editor. Combine the following article data into a polished, structured scientific article.
 
@@ -25,7 +27,7 @@ You are a scientific editor. Combine the following article data into a polished,
 {outline.abstract}
 
 === SECTIONS ===
-{"\n\n".join(sections)}
+{joined_sections}
 
 === GOAL ===
 We want a logically flowing, coherent, well-written article using only the content above. Add intro/conclusion/transitions if missing. Keep it formal and academic.
