@@ -80,6 +80,7 @@ def create_outline(session_id: str):
     # ✅ Save it!
     session["outline"] = outline.dict()
     save_session_chunks(session_id, session["query"], session["chunks"])  # resave session with outline
+    print(session)
 
     return {
         "session_id": session_id,
@@ -96,7 +97,7 @@ import json
 @router.post("/agent/section/{section_id}")
 def write_section_by_id(session_id: str, section_id: int):
     session = get_session_chunks(session_id)
-    print(session)
+    # print(session)
     if not session or "outline" not in session:
         raise HTTPException(status_code=404, detail="Session or outline missing")
 
