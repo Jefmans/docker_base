@@ -87,6 +87,7 @@ import json
 @router.post("/agent/section/{section_id}")
 def write_section_by_id(session_id: str, section_id: int):
     session = get_session_chunks(session_id)
+    print(session)
     if not session or "outline" not in session:
         raise HTTPException(status_code=404, detail="Session or outline missing")
 
