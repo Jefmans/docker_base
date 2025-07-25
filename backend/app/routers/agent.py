@@ -120,3 +120,74 @@ def write_section_by_id(session_id: str, section_id: int):
 
     except Exception as e:
         raise HTTPException(status_code=500, detail=str(e))
+
+
+from app.utils.agent.finalizer import finalize_article
+
+@router.post("/agent/article/finalize")
+def finalize_article_route(session_id: str):
+    session = get_session_chunks(session_id)
+    if not session:
+        raise HTTPException(status_code=404, detail="Session not found")
+
+    # Make sure session includes the sections
+    session["session_id"] = session_id  # Needed for get_all_sections
+    article_text = finalize_article(session)
+
+    return {
+        "session_id": session_id,
+        "title": session.get("outline", {}).get("title", "Untitled Article"),
+        "article": article_text
+    }
+
+
+from fastapi import BackgroundTasks
+from app.utils.agent.search_chunks import search_chunks_for_query
+from app.utils.agent.memory import save_session_chunks, get_session_chunks, save_section
+from app.utils.agent.subquestions import generate_subquestions_from_chunks
+from app.utils.agent.outline import generate_outline, Outline
+from app.utils.agent.writer import write_section
+from app.utils.agent.finalizer import finalize_article
+from uuid import uuid4
+
+@router.post("/agent/full_run")
+def full_run(request: AgentQueryRequest, background_tasks: BackgroundTasks = None):
+    try:
+        # STEP 1: Query & retrieve chunks
+        session_id = str(uuid4())
+        top_chunks = search_chunks_for_query(request.query, top_k=request.top_k)
+        save_session_chunks(session_id, request.query, top_chunks)
+
+        # STEP 2: Subquestions
+        subq = generate_subquestions_from_chunks(top_chunks, request.query)
+
+        # STEP 3: Outline
+        outline = generate_outline(subq, request.query)
+        session = get_session_chunks(session_id)
+        session["outline"] = outline.dict()
+
+        # STEP 4: Write each section
+        section_outputs = []
+        for i, section in enumerate(outline.sections):
+            text = write_section(section.dict())
+            save_section(session_id, i, text)
+            section_outputs.append({
+                "heading": section.heading,
+                "text": text
+            })
+
+        # STEP 5: Finalize article
+        session["session_id"] = session_id
+        article = finalize_article(session)
+
+        return {
+            "session_id": session_id,
+            "title": outline.title,
+            "abstract": outline.abstract,
+            "outline": [s.dict() for s in outline.sections],
+            "sections": section_outputs,
+            "article": article
+        }
+
+    except Exception as e:
+        raise HTTPException(status_code=500, detail=str(e))
