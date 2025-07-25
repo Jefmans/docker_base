@@ -78,3 +78,33 @@ def create_outline(session_id: str):
         "outline": outline.dict()  # FastAPI handles this gracefully
     }
 
+
+from app.utils.agent.writer import write_section, save_section
+from app.utils.agent.outline import Outline  # Pydantic model
+import json
+
+@router.post("/agent/section/{section_id}")
+def write_section_by_id(session_id: str, section_id: int):
+    session = get_session_chunks(session_id)
+    if not session or "outline" not in session:
+        raise HTTPException(status_code=404, detail="Session or outline missing")
+
+    outline_data = session["outline"]
+    if isinstance(outline_data, str):
+        outline_data = json.loads(outline_data)  # support old string-based storage
+
+    try:
+        outline = Outline(**outline_data)
+        section = outline.sections[section_id]
+        generated_text = write_section(section.dict())
+        save_section(session_id, section_id, generated_text)
+
+        return {
+            "session_id": session_id,
+            "section_id": section_id,
+            "heading": section.heading,
+            "text": generated_text
+        }
+
+    except Exception as e:
+        raise HTTPException(status_code=500, detail=str(e))
