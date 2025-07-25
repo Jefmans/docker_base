@@ -64,6 +64,10 @@ def generate_subquestions(session_id: str):
 
 from app.utils.agent.outline import generate_outline
 
+from app.utils.agent.memory import save_session_chunks
+
+...
+
 @router.post("/agent/outline")
 def create_outline(session_id: str):
     session = get_session_chunks(session_id)
@@ -73,10 +77,15 @@ def create_outline(session_id: str):
     subq = generate_subquestions_from_chunks(session["chunks"], session["query"])
     outline = generate_outline(subq, session["query"])
 
+    # ✅ Save it!
+    session["outline"] = outline.dict()
+    save_session_chunks(session_id, session["query"], session["chunks"])  # resave session with outline
+
     return {
         "session_id": session_id,
-        "outline": outline.dict()  # FastAPI handles this gracefully
+        "outline": outline.dict()
     }
+
 
 
 from app.utils.agent.writer import write_section
