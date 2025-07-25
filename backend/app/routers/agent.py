@@ -70,11 +70,11 @@ def create_outline(session_id: str):
     if not session or "query" not in session or "chunks" not in session:
         raise HTTPException(status_code=404, detail="Session not found")
 
-    # First call subquestion generator again (or reuse previous result)
     subq = generate_subquestions_from_chunks(session["chunks"], session["query"])
     outline = generate_outline(subq, session["query"])
 
     return {
         "session_id": session_id,
-        "outline": outline
+        "outline": outline.dict()  # FastAPI handles this gracefully
     }
+

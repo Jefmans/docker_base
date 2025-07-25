@@ -1,30 +1,47 @@
 from typing import List, Dict
 from langchain_openai import ChatOpenAI
 
-def generate_outline(subquestions: List[str], query: str) -> Dict:
+from pydantic import BaseModel, Field
+from langchain.output_parsers import PydanticOutputParser
+from langchain.prompts import PromptTemplate
+from langchain_openai import ChatOpenAI
+
+
+
+class OutlineSection(BaseModel):
+    heading: str
+    goals: str
+    questions: List[str]
+
+class Outline(BaseModel):
+    title: str
+    abstract: str
+    sections: List[OutlineSection]
+
+
+
+
+def generate_outline(subquestions: List[str], query: str) -> Outline:
     llm = ChatOpenAI(model="gpt-4o", temperature=0)
+    parser = PydanticOutputParser(pydantic_object=Outline)
 
-    joined_subs = "\n".join(f"- {q}" for q in subquestions)
-    prompt = f"""
-You are a scientific assistant. Based on the main query and subquestions below, create an outline for a scientific article.
+    formatted_subq = "\n".join(f"- {q}" for q in subquestions)
 
-MAIN QUESTION: {query}
+    prompt = PromptTemplate(
+        template="""
+You are a scientific writer assistant. Create a full outline for a scientific article based on the main question and subquestions below.
+
+MAIN QUESTION:
+{query}
 
 SUBQUESTIONS:
-{joined_subs}
+{formatted_subq}
 
-Respond in JSON format:
-{{
-  "title": "...",
-  "abstract": "...",
-  "sections": [
-    {{
-      "heading": "...",
-      "goals": "...",
-      "questions": [...]
-    }},
-    ...
-  ]
-}}
-"""
-    return llm.invoke(prompt).content
+{format_instructions}
+""",
+        input_variables=["query", "formatted_subq"],
+        partial_variables={"format_instructions": parser.get_format_instructions()}
+    )
+
+    chain = prompt | llm | parser
+    return chain.invoke({"query": query, "formatted_subq": formatted_subq})
