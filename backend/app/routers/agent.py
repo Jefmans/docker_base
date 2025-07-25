@@ -3,6 +3,10 @@ from uuid import uuid4
 from app.utils.agent.search_chunks import search_chunks_for_query
 from app.utils.agent.memory import save_session_chunks
 from pydantic import BaseModel
+import logging
+
+
+logger = logging.getLogger(__name__)
 
 
 router = APIRouter()
@@ -14,6 +18,7 @@ class AgentQueryRequest(BaseModel):
 @router.post("/agent/query")
 async def start_query_session(request: AgentQueryRequest):
     user_query = request.query
+    logger.info(f"{request}")
 
     if not user_query:
         raise HTTPException(status_code=400, detail="Missing 'query' in request body.")
