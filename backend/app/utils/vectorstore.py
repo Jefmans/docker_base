@@ -3,7 +3,7 @@ from langchain.embeddings import OpenAIEmbeddings
 from elasticsearch import Elasticsearch
 import os
 
-def get_vectorstore(index_name: str = "chunks") -> ElasticsearchStore:
+def get_vectorstore(index_name: str = "pdf_chunks") -> ElasticsearchStore:
     es_client = Elasticsearch(
         hosts=[os.environ.get("ELASTIC_HOST", "http://elasticsearch:9200")],
         basic_auth=(
