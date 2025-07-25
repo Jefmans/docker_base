@@ -2,29 +2,50 @@ from typing import List
 from langchain_openai import ChatOpenAI
 import json
 
-def generate_subquestions_from_chunks(chunks: List[str], user_query: str, model_name: str = "gpt-4o") -> str:
+from pydantic import BaseModel
+from typing import List
+
+class SubquestionList(BaseModel):
+    questions: List[str]
+
+
+
+from langchain.output_parsers import PydanticOutputParser
+from langchain.prompts import PromptTemplate
+from langchain.schema.runnable import RunnableMap
+from langchain_openai import ChatOpenAI
+import json
+
+def generate_subquestions_from_chunks(chunks: List[str], user_query: str, model_name: str = "gpt-4o") -> List[str]:
     llm = ChatOpenAI(model=model_name, temperature=0)
 
-    context = "\n\n".join(chunks[:20])  # Only top 20 chunks for safety
-    prompt = f"""
-You are a scientific research assistant. A user has asked the question: "{user_query}"
+    # Limit chunk length to avoid context overflow
+    context = "\n\n".join(chunks[:20])
 
-Based only on the real scientific context below (from books and articles), generate 5 to 10 important and well-formed scientific subquestions that would help answer the user's query in depth.
+    parser = PydanticOutputParser(pydantic_object=SubquestionList)
 
-Only ask questions that can be addressed using the context. Do not invent questions that require external knowledge.
+    prompt = PromptTemplate(
+        template="""
+You are a scientific assistant. Based on the user query and real scientific context below, generate a list of 5–10 detailed subquestions.
 
-Respond with a JSON array of strings.
+Only ask questions that are grounded in the context. Return your result using this format:
+{format_instructions}
 
---- CONTEXT START ---
+=== USER QUESTION ===
+{query}
+
+=== CONTEXT ===
 {context}
---- CONTEXT END ---
-"""
+""",
+        input_variables=["query", "context"],
+        partial_variables={"format_instructions": parser.get_format_instructions()}
+    )
 
-    response = llm.invoke(prompt)
-
-
+    chain = prompt | llm | parser
 
     try:
-        return json.loads(response.content.strip())
-    except:
-        return [line.strip("- ") for line in response.content.strip().split("\n") if line.strip()]
+        result = chain.invoke({"query": user_query, "context": context})
+        return result.questions
+    except Exception as e:
+        print("❌ Subquestion parsing failed:", e)
+        raise
