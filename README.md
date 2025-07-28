@@ -1,3 +1,7 @@
+When starting new server:
+1) root into your server with ssh
+2) git clone
+
 When new start dockers:
 1) create ES views in Kibana => "pdf_chunks" - "captions"  (http://65.109.170.93/kibana/app/management/data/index_management/indices)
 2) create buckets in MiniO => "images" - "uploads"
