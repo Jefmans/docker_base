@@ -1,6 +1,11 @@
 When starting new server:
 1) root into your server with ssh
 2) git clone
+3) install docker https://docs.docker.com/engine/install/ubuntu/ + "apt install docker-compose" (https://docs.docker.com/compose/install/linux/#install-using-the-repository)
+4) create .env
+5) docker-compose up -d
+
+
 
 When new start dockers:
 1) create ES views in Kibana => "pdf_chunks" - "captions"  (http://65.109.170.93/kibana/app/management/data/index_management/indices)
@@ -39,3 +44,10 @@ TO DO
 7) use Tailscale
 
 8) storing in Elastic => we're using different methods in different places for "pdf_chunks" - "captions" => streamline
+
+
+
+
+DON'T FORGET
+--------------
+1)  metadata route in backend use the  metadata route in pdf_worker => And then saves this data to postgress 

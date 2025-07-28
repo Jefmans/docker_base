@@ -6,16 +6,28 @@ from sqlalchemy.dialects.postgresql import UUID
 from sqlalchemy.ext.declarative import declarative_base
 import uuid
 
+# backend/app/db.py (partial update to add Session model)
+
+from sqlalchemy.dialects.postgresql import JSONB
+from datetime import datetime
+
 
 
 # DATABASE_URL = "postgresql://myuser:mypassword@postgres:5432/myappdb"
 DATABASE_URL = "postgresql://test:test@postgres:5432/testdb"
 engine = create_engine(DATABASE_URL)
 SessionLocal = sessionmaker(autocommit=False, autoflush=False, bind=engine)
-
-
-
 Base = declarative_base()
+
+
+class Session(Base):
+    __tablename__ = "sessions"
+
+    id = Column(UUID(as_uuid=True), primary_key=True, default=uuid.uuid4)
+    query = Column(String, nullable=False)
+    tree = Column(JSONB, nullable=False)
+    created_at = Column(TIMESTAMP, default=datetime.utcnow)
+
 
 class Document(Base):
     __tablename__ = "documents"

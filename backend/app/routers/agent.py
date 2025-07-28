@@ -3,6 +3,11 @@ from uuid import uuid4
 from pydantic import BaseModel
 from app.utils.agent.search_chunks import search_chunks
 from app.utils.agent.memory import save_session_chunks, get_session_chunks, save_section, save_research_tree
+from app.utils.agent.session_memory_db import (
+    save_session_chunks_db, get_session_chunks_db,
+    save_section_db, get_all_sections_db,
+    save_research_tree_db, get_research_tree_db
+)
 from app.utils.agent.subquestions import generate_subquestions_from_chunks
 from app.utils.agent.outline import generate_outline, Outline
 from app.utils.agent.writer import write_section
@@ -40,7 +45,7 @@ async def start_query_session(request: AgentQueryRequest):
         tree = ResearchTree(query=user_query, root_node=root_node)
 
         session_id = str(uuid4())
-        save_research_tree(session_id, tree)
+        save_research_tree_db(session_id, tree)
 
         return {
             "status": "success",
@@ -56,7 +61,7 @@ async def start_query_session(request: AgentQueryRequest):
 
 @router.post("/agent/subquestions")
 def generate_subquestions(session_id: str):
-    session = get_session_chunks(session_id)
+    session = get_session_chunks_db(session_id)
     if not session:
         raise HTTPException(status_code=404, detail="Session not found")
 
@@ -73,7 +78,7 @@ def generate_subquestions(session_id: str):
 
 @router.post("/agent/outline")
 def create_outline(session_id: str):
-    session = get_session_chunks(session_id)
+    session = get_session_chunks_db(session_id)
     if not session or "query" not in session or "chunks" not in session:
         raise HTTPException(status_code=404, detail="Session not found")
 
@@ -82,7 +87,7 @@ def create_outline(session_id: str):
 
     # ✅ Save it!
     session["outline"] = outline.dict()
-    save_session_chunks(session_id, session["query"], session["chunks"])  # resave session with outline
+    save_session_chunks_db(session_id, session["query"], session["chunks"])  # resave session with outline
     print(session)
 
     return {
@@ -93,7 +98,7 @@ def create_outline(session_id: str):
 
 @router.post("/agent/section/{section_id}")
 def write_section_by_id(session_id: str, section_id: int):
-    session = get_session_chunks(session_id)
+    session = get_session_chunks_db(session_id)
     # print(session)
     if not session or "outline" not in session:
         raise HTTPException(status_code=404, detail="Session or outline missing")
@@ -106,7 +111,7 @@ def write_section_by_id(session_id: str, section_id: int):
         outline = Outline(**outline_data)
         section = outline.sections[section_id]
         generated_text = write_section(section.dict())
-        save_section(session_id, section_id, generated_text)
+        save_section_db(session_id, section_id, generated_text)
 
         return {
             "session_id": session_id,
@@ -121,7 +126,7 @@ def write_section_by_id(session_id: str, section_id: int):
 
 @router.post("/agent/article/finalize")
 def finalize_article_route(session_id: str):
-    session = get_session_chunks(session_id)
+    session = get_session_chunks_db(session_id)
     if not session:
         raise HTTPException(status_code=404, detail="Session not found")
 
@@ -143,21 +148,21 @@ def full_run(request: AgentQueryRequest, background_tasks: BackgroundTasks = Non
         # STEP 1: Query & retrieve chunks
         session_id = str(uuid4())
         top_chunks = search_chunks(request.query, top_k=request.top_k)
-        save_session_chunks(session_id, request.query, top_chunks)
+        save_session_chunks_db(session_id, request.query, top_chunks)
 
         # STEP 2: Subquestions
         subq = generate_subquestions_from_chunks(top_chunks, request.query)
 
         # STEP 3: Outline
         outline = generate_outline(subq, request.query)
-        session = get_session_chunks(session_id)
+        session = get_session_chunks_db(session_id)
         session["outline"] = outline.dict()
 
         # STEP 4: Write each section
         section_outputs = []
         for i, section in enumerate(outline.sections):
             text = write_section(section.dict())
-            save_section(session_id, i, text)
+            save_section_db(session_id, i, text)
             section_outputs.append({
                 "heading": section.heading,
                 "text": text
