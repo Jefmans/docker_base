@@ -141,3 +141,9 @@ class ResearchTree(BaseModel):
                 walk(sn)
         walk(self.root_node)
         return nodes
+
+    def model_dump_jsonable(self):
+        d = self.model_dump()
+        d["used_questions"] = list(self.used_questions)
+        d["used_chunk_ids"] = list(self.used_chunk_ids)
+        return d

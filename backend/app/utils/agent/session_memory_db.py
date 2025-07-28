@@ -49,11 +49,13 @@ def get_all_sections_db(session_id: str) -> List[str]:
 # --- Save full ResearchTree ---
 def save_research_tree_db(session_id: str, tree: ResearchTree):
     with SessionLocal() as db:
+        tree_dict = tree.model_dump_jsonable()
+
         existing = db.query(SessionModel).filter_by(id=session_id).first()
         if existing:
-            existing.tree = tree.model_dump()
+            existing.tree = tree_dict
         else:
-            db.add(SessionModel(id=session_id, query=tree.query, tree=tree.model_dump()))
+            db.add(SessionModel(id=session_id, query=tree.query, tree=tree_dict))
         db.commit()
 
 # --- Load ResearchTree ---
