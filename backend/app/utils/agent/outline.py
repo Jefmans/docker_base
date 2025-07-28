@@ -29,16 +29,16 @@ def generate_outline(subquestions: List[str], query: str) -> Outline:
 
     prompt = PromptTemplate(
         template="""
-You are a scientific writer assistant. Create a full outline for a scientific article based on the main question and subquestions below.
+            You are a scientific writer assistant. Create a full outline for a scientific article based on the main question and subquestions below.
 
-MAIN QUESTION:
-{query}
+            MAIN QUESTION:
+            {query}
 
-SUBQUESTIONS:
-{formatted_subq}
+            SUBQUESTIONS:
+            {formatted_subq}
 
-{format_instructions}
-""",
+            {format_instructions}
+            """,
         input_variables=["query", "formatted_subq"],
         partial_variables={"format_instructions": parser.get_format_instructions()}
     )

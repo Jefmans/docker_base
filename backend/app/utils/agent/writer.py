@@ -29,16 +29,16 @@ def write_section(section: dict) -> str:
         return f"(No relevant context found for section: {heading})"
 
     prompt = f"""
-You are a scientific writer. Write a detailed section titled "{heading}" with the following goals:
+            You are a scientific writer. Write a detailed section titled "{heading}" with the following goals:
 
-{goals}
+            {goals}
 
-Use only the CONTEXT below, which comes from academic PDFs. Do not add external knowledge.
+            Use only the CONTEXT below, which comes from academic PDFs. Do not add external knowledge.
 
-CONTEXT:
-{context}
+            CONTEXT:
+            {context}
 
-Write a clear and informative section (300–800 words) based on the questions:
-{questions}
-"""
+            Write a clear and informative section (300–800 words) based on the questions:
+            {questions}
+            """
     return llm.invoke(prompt).content.strip()

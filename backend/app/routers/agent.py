@@ -1,13 +1,14 @@
-from fastapi import APIRouter, Request, HTTPException
+from fastapi import APIRouter, Request, HTTPException, BackgroundTasks
 from uuid import uuid4
-from app.utils.agent.search_chunks import search_chunks_for_query
-from app.utils.agent.memory import save_session_chunks
 from pydantic import BaseModel
-import logging
-
-
-logger = logging.getLogger(__name__)
-logger.info("START")
+from app.utils.agent.search_chunks import search_chunks_for_query
+from app.utils.agent.memory import save_session_chunks, get_session_chunks, save_section
+from app.utils.agent.subquestions import generate_subquestions_from_chunks
+from app.utils.agent.outline import generate_outline, Outline
+from app.utils.agent.writer import write_section
+import json
+from app.utils.agent.finalizer import finalize_article
+from app.models.research_tree import ResearchTree, ResearchNode, Chunk
 
 router = APIRouter()
 
@@ -16,34 +17,23 @@ class AgentQueryRequest(BaseModel):
     top_k: int = 5
 
 @router.post("/agent/query")
-async def start_query_session(request: AgentQueryRequest):
-    user_query = request.query
-    logger.info("HELLO WORLD")
+def handle_query(req: QueryRequest):
+    query = req.query
+    top_chunks = search_chunks(query, top_k=10)  # existing chunk retrieval logic
 
-    if not user_query:
-        raise HTTPException(status_code=400, detail="Missing 'query' in request body.")
+    # Wrap chunks in Chunk models
+    wrapped_chunks = [Chunk(**c.dict()) for c in top_chunks]
 
-    try:
-        # Search chunks in Elastic
-        top_chunks = search_chunks_for_query(user_query, top_k=request.top_k)
+    # Initialize research tree
+    root_node = ResearchNode(title="Root", chunks=wrapped_chunks)
+    tree = ResearchTree(query=query, root_node=root_node)
 
-        # Save in a new session
-        session_id = str(uuid4())
-        save_session_chunks(session_id, user_query, top_chunks)
+    # Store in session or global object (depending on your setup)
+    _session_store[req.session_id] = {"tree": tree.dict()}
 
-        return {
-            "status": "success",
-            "session_id": session_id,
-            "query": user_query,
-            "preview_chunks": top_chunks[:3]  # optional preview
-        }
-
-    except Exception as e:
-        raise HTTPException(status_code=500, detail=str(e))
+    return {"status": "tree_initialized", "top_chunks": top_chunks}
 
 
-from app.utils.agent.memory import get_session_chunks
-from app.utils.agent.subquestions import generate_subquestions_from_chunks
 
 @router.post("/agent/subquestions")
 def generate_subquestions(session_id: str):
@@ -61,12 +51,6 @@ def generate_subquestions(session_id: str):
         "subquestions": subq
     }
 
-
-from app.utils.agent.outline import generate_outline
-
-from app.utils.agent.memory import save_session_chunks
-
-...
 
 @router.post("/agent/outline")
 def create_outline(session_id: str):
@@ -87,12 +71,6 @@ def create_outline(session_id: str):
         "outline": outline.dict()
     }
 
-
-
-from app.utils.agent.writer import write_section
-from app.utils.agent.memory import save_section
-from app.utils.agent.outline import Outline  # Pydantic model
-import json
 
 @router.post("/agent/section/{section_id}")
 def write_section_by_id(session_id: str, section_id: int):
@@ -122,8 +100,6 @@ def write_section_by_id(session_id: str, section_id: int):
         raise HTTPException(status_code=500, detail=str(e))
 
 
-from app.utils.agent.finalizer import finalize_article
-
 @router.post("/agent/article/finalize")
 def finalize_article_route(session_id: str):
     session = get_session_chunks(session_id)
@@ -141,14 +117,6 @@ def finalize_article_route(session_id: str):
     }
 
 
-from fastapi import BackgroundTasks
-from app.utils.agent.search_chunks import search_chunks_for_query
-from app.utils.agent.memory import save_session_chunks, get_session_chunks, save_section
-from app.utils.agent.subquestions import generate_subquestions_from_chunks
-from app.utils.agent.outline import generate_outline, Outline
-from app.utils.agent.writer import write_section
-from app.utils.agent.finalizer import finalize_article
-from uuid import uuid4
 
 @router.post("/agent/full_run")
 def full_run(request: AgentQueryRequest, background_tasks: BackgroundTasks = None):

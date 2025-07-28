@@ -26,17 +26,17 @@ def generate_subquestions_from_chunks(chunks: List[str], user_query: str, model_
 
     prompt = PromptTemplate(
         template="""
-You are a scientific assistant. Based on the user query and real scientific context below, generate a list of 5–10 detailed subquestions.
+            You are a scientific assistant. Based on the user query and real scientific context below, generate a list of 5–10 detailed subquestions.
 
-Only ask questions that are grounded in the context. Return your result using this format:
-{format_instructions}
+            Only ask questions that are grounded in the context. Return your result using this format:
+            {format_instructions}
 
-=== USER QUESTION ===
-{query}
+            === USER QUESTION ===
+            {query}
 
-=== CONTEXT ===
-{context}
-""",
+            === CONTEXT ===
+            {context}
+            """,
         input_variables=["query", "context"],
         partial_variables={"format_instructions": parser.get_format_instructions()}
     )
