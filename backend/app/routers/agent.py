@@ -2,7 +2,7 @@ from fastapi import APIRouter, Request, HTTPException, BackgroundTasks
 from uuid import uuid4
 from pydantic import BaseModel
 from app.utils.agent.search_chunks import search_chunks_for_query
-from app.utils.agent.memory import save_session_chunks, get_session_chunks, save_section
+from app.utils.agent.memory import save_session_chunks, get_session_chunks, save_section, _session_store
 from app.utils.agent.subquestions import generate_subquestions_from_chunks
 from app.utils.agent.outline import generate_outline, Outline
 from app.utils.agent.writer import write_section
@@ -127,7 +127,7 @@ def finalize_article_route(session_id: str):
 
 
 @router.post("/agent/full_run")
-def full_run(request: AgentQueryRequest, background_tasks: BackgroundTasks = None):
+def full_run(request: QueryRequest, background_tasks: BackgroundTasks = None):
     try:
         # STEP 1: Query & retrieve chunks
         session_id = str(uuid4())
