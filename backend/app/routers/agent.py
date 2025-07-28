@@ -11,6 +11,7 @@ from app.utils.agent.finalizer import finalize_article
 from app.models.research_tree import ResearchTree, ResearchNode, Chunk
 from app.utils.agent.memory import get_research_tree
 from fastapi.responses import JSONResponse
+from fastapi.encoders import jsonable_encoder
 
 
 
@@ -182,10 +183,12 @@ def full_run(request: AgentQueryRequest, background_tasks: BackgroundTasks = Non
 
 
 
+
+
 @router.get("/agent/tree/{session_id}")
 def get_tree(session_id: str):
     tree = get_research_tree(session_id)
     if not tree:
         raise HTTPException(status_code=404, detail="Session or tree not found")
 
-    return JSONResponse(content=tree.model_dump(), indent=2)
+    return JSONResponse(content=jsonable_encoder(tree))
