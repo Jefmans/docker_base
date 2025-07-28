@@ -143,7 +143,23 @@ class ResearchTree(BaseModel):
         return nodes
 
     def model_dump_jsonable(self):
-        d = self.model_dump()
-        d["used_questions"] = list(self.used_questions)
-        d["used_chunk_ids"] = list(self.used_chunk_ids)
-        return d
+        def clean_node(node):
+            return {
+                "title": node.title,
+                "questions": node.questions,
+                "generated_questions": node.generated_questions,
+                "chunks": [c.dict() for c in node.chunks],
+                "chunk_ids": list(node.chunk_ids),
+                "content": node.content,
+                "summary": node.summary,
+                "conclusion": node.conclusion,
+                "is_final": node.is_final,
+                "subnodes": [clean_node(sn) for sn in node.subnodes]
+            }
+
+        return {
+            "query": self.query,
+            "root_node": clean_node(self.root_node),
+            "used_questions": list(self.used_questions),
+            "used_chunk_ids": list(self.used_chunk_ids)
+    }
