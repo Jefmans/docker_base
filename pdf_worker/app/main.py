@@ -106,7 +106,7 @@ def process_clean_embed_chunks(filename: str):
         embedded = embed_chunks(chunks)
 
         # ✅ Step 4: Save to ES
-        save_chunks_to_es(filename, embedded)
+        # save_chunks_to_es(filename, embedded)
 
         return embedded
 

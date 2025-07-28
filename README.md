@@ -1,5 +1,5 @@
 When new start dockers:
-1) create buckets in Elastic => "pdf_chunks" - "captions"
+1) create ES views in Kibana => "pdf_chunks" - "captions"  (http://65.109.170.93/kibana/app/management/data/index_management/indices)
 2) create buckets in MiniO => "images" - "uploads"
 
 
