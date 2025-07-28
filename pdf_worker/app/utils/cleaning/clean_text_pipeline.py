@@ -6,8 +6,8 @@ from app.utils.cleaning.page_numbers import detect_page_numbers, remove_page_num
 def clean_document_text(pdf_path: str) -> List[str]:
     """Returns cleaned text per page (as joined string per page)."""
     doc = fitz.open(pdf_path)
-    pages_text = [page.get_text().splitlines() for page in doc[59:62]]
-    # pages_text = [page.get_text().splitlines() for page in doc]
+    # pages_text = [page.get_text().splitlines() for page in doc[59:62]]
+    pages_text = [page.get_text().splitlines() for page in doc]
 
     # Step 1: Remove headers & footers
     header_set, footer_set = collect_repeating_lines(pages_text)
