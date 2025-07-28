@@ -1,3 +1,12 @@
+When new start dockers:
+1) create buckets in Elastic => "pdf_chunks" - "captions"
+2) create buckets in MiniO => "images" - "uploads"
+
+
+
+
+
+
 uses "vector" field in es => because 
 from langchain_elasticsearch import ElasticsearchStore
 has no
@@ -18,3 +27,11 @@ TO DO
 3) it is possible to upload the same file twice
 
 4) Update Embedding Upload in Elastic to add "metadata = {}" => to be able to access other fiels like "pages, ..."
+
+5) create CONSTANTS for all the system ... + us .env
+
+6) secure the system (Elastic, ...) with pw + vault + ...
+
+7) use Tailscale
+
+8) storing in Elastic => we're using different methods in different places for "pdf_chunks" - "captions" => streamline
