@@ -12,26 +12,34 @@ from app.models.research_tree import ResearchTree, ResearchNode, Chunk
 
 router = APIRouter()
 
-class AgentQueryRequest(BaseModel):
+class QueryRequest(BaseModel):
     query: str = "What is a black hole ?"
     top_k: int = 5
 
 @router.post("/agent/query")
 def handle_query(req: QueryRequest):
     query = req.query
-    top_chunks = search_chunks(query, top_k=10)  # existing chunk retrieval logic
+    
+    if not query:
+        raise HTTPException(status_code=400, detail="Missing 'query' in request body.")
 
-    # Wrap chunks in Chunk models
-    wrapped_chunks = [Chunk(**c.dict()) for c in top_chunks]
+    try:
+        top_chunks = search_chunks_for_query(query, top_k=10)  # existing chunk retrieval logic
 
-    # Initialize research tree
-    root_node = ResearchNode(title="Root", chunks=wrapped_chunks)
-    tree = ResearchTree(query=query, root_node=root_node)
+        # Wrap chunks in Chunk models
+        wrapped_chunks = [Chunk(**c.dict()) for c in top_chunks]
 
-    # Store in session or global object (depending on your setup)
-    _session_store[req.session_id] = {"tree": tree.dict()}
+        # Initialize research tree
+        root_node = ResearchNode(title="Root", chunks=wrapped_chunks)
+        tree = ResearchTree(query=query, root_node=root_node)
 
-    return {"status": "tree_initialized", "top_chunks": top_chunks}
+        # Store in session or global object (depending on your setup)
+        _session_store[req.session_id] = {"tree": tree.dict()}
+
+        return {"status": "tree_initialized", "top_chunks": top_chunks, "doc": tree.dict()}
+    
+    except Exception as e:
+        raise HTTPException(status_code=500, detail=str(e))    
 
 
 
