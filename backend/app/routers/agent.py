@@ -1,8 +1,8 @@
 from fastapi import APIRouter, Request, HTTPException, BackgroundTasks
 from uuid import uuid4
 from pydantic import BaseModel
-from app.utils.agent.search_chunks import search_chunks_for_query
-from app.utils.agent.memory import save_session_chunks, get_session_chunks, save_section, _session_store
+from app.utils.agent.search_chunks import search_chunks
+from app.utils.agent.memory import save_session_chunks, get_session_chunks, save_section, save_research_tree
 from app.utils.agent.subquestions import generate_subquestions_from_chunks
 from app.utils.agent.outline import generate_outline, Outline
 from app.utils.agent.writer import write_section
@@ -12,34 +12,39 @@ from app.models.research_tree import ResearchTree, ResearchNode, Chunk
 
 router = APIRouter()
 
-class QueryRequest(BaseModel):
+class AgentQueryRequest(BaseModel):
     query: str = "What is a black hole ?"
     top_k: int = 5
 
+
+
 @router.post("/agent/query")
-def handle_query(req: QueryRequest):
-    query = req.query
-    
-    if not query:
+async def start_query_session(request: AgentQueryRequest):
+    user_query = request.query
+    if not user_query:
         raise HTTPException(status_code=400, detail="Missing 'query' in request body.")
 
     try:
-        top_chunks = search_chunks_for_query(query, top_k=10)  # existing chunk retrieval logic
+        top_chunks = search_chunks(user_query, top_k=request.top_k)
 
-        # Wrap chunks in Chunk models
-        wrapped_chunks = [Chunk(**c.dict()) for c in top_chunks]
+        # Convert chunks (currently strings) to Chunk objects — improve later
+        chunk_objs = [Chunk(id=str(i), text=c, page=None, source=None) for i, c in enumerate(top_chunks)]
 
-        # Initialize research tree
-        root_node = ResearchNode(title="Root", chunks=wrapped_chunks)
-        tree = ResearchTree(query=query, root_node=root_node)
+        root_node = ResearchNode(title=user_query, chunks=chunk_objs)
+        tree = ResearchTree(query=user_query, root_node=root_node)
 
-        # Store in session or global object (depending on your setup)
-        _session_store[req.session_id] = {"tree": tree.dict()}
+        session_id = str(uuid4())
+        save_research_tree(session_id, tree)
 
-        return {"status": "tree_initialized", "top_chunks": top_chunks, "doc": tree.dict()}
-    
+        return {
+            "status": "success",
+            "session_id": session_id,
+            "query": user_query,
+            "preview_chunks": top_chunks[:3]
+        }
+
     except Exception as e:
-        raise HTTPException(status_code=500, detail=str(e))    
+        raise HTTPException(status_code=500, detail=str(e))
 
 
 
@@ -127,11 +132,11 @@ def finalize_article_route(session_id: str):
 
 
 @router.post("/agent/full_run")
-def full_run(request: QueryRequest, background_tasks: BackgroundTasks = None):
+def full_run(request: AgentQueryRequest, background_tasks: BackgroundTasks = None):
     try:
         # STEP 1: Query & retrieve chunks
         session_id = str(uuid4())
-        top_chunks = search_chunks_for_query(request.query, top_k=request.top_k)
+        top_chunks = search_chunks(request.query, top_k=request.top_k)
         save_session_chunks(session_id, request.query, top_chunks)
 
         # STEP 2: Subquestions

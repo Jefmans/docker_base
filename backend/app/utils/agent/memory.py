@@ -1,4 +1,5 @@
 from typing import Dict, List
+from app.models.research_tree import ResearchTree
 
 _session_store: Dict[str, Dict] = {}
 
@@ -18,3 +19,15 @@ def save_section(session_id: str, section_index: int, text: str):
 
 def get_all_sections(session_id: str) -> List[str]:
     return list(_session_store.get(session_id, {}).get("sections", {}).values())
+
+
+
+
+def save_research_tree(session_id: str, tree: ResearchTree):
+    _session_store[session_id] = {"tree": tree.model_dump()}
+
+def get_research_tree(session_id: str) -> ResearchTree:
+    session = _session_store.get(session_id)
+    if not session or "tree" not in session:
+        return None
+    return ResearchTree(**session["tree"])

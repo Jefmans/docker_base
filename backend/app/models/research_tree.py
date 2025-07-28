@@ -1,6 +1,4 @@
-# core/agent/research_tree.py
-
-from typing import List, Optional, Dict
+from typing import List, Optional, Dict, Set
 from pydantic import BaseModel
 
 
@@ -15,10 +13,14 @@ class Chunk(BaseModel):
 class ResearchNode(BaseModel):
     title: str
     questions: List[str] = []
+    generated_questions: List[str] = []  # New: track subquestions
     chunks: List[Chunk] = []
+    chunk_ids: Set[str] = set()  # New: track used chunk IDs
+
     content: Optional[str] = None
     summary: Optional[str] = None
     conclusion: Optional[str] = None
+    is_final: bool = False
 
     parent: Optional["ResearchNode"] = None
     subnodes: List["ResearchNode"] = []
@@ -49,15 +51,30 @@ class ResearchNode(BaseModel):
                 return result
         return None
 
+    def mark_final(self):
+        self.is_final = True
+
+    def needs_more_chunks(self, threshold: int = 3) -> bool:
+        return len(self.chunks) < threshold
+
+    def needs_expansion(self) -> bool:
+        return not self.content or self.needs_more_chunks() or not self.summary
+
 
 class ResearchTree(BaseModel):
     query: str
     root_node: ResearchNode
+    used_questions: Set[str] = set()
+    used_chunk_ids: Set[str] = set()
 
     class Config:
         arbitrary_types_allowed = True
 
-    def deduplicate_chunks(self):
+    def deduplicate_all(self):
+        self._deduplicate_chunks()
+        self._deduplicate_questions()
+
+    def _deduplicate_chunks(self):
         seen_ids = set()
         def dedup(node: ResearchNode):
             unique = []
@@ -69,8 +86,9 @@ class ResearchTree(BaseModel):
             for sn in node.subnodes:
                 dedup(sn)
         dedup(self.root_node)
+        self.used_chunk_ids = seen_ids
 
-    def deduplicate_questions(self):
+    def _deduplicate_questions(self):
         seen = set()
         def dedup(node: ResearchNode):
             filtered = []
@@ -83,13 +101,9 @@ class ResearchTree(BaseModel):
             for sn in node.subnodes:
                 dedup(sn)
         dedup(self.root_node)
+        self.used_questions = seen
 
-    def generate_article(self, format: str = "markdown") -> str:
-        if format == "markdown":
-            return self._to_markdown()
-        raise NotImplementedError(f"Format {format} not supported yet.")
-
-    def _to_markdown(self) -> str:
+    def to_markdown(self) -> str:
         def walk(node: ResearchNode, level: int = 2) -> str:
             text = f"{'#' * level} {node.title}\n\n"
             if node.content:
@@ -103,6 +117,21 @@ class ResearchTree(BaseModel):
             return text
 
         return f"# Research Article\n\n## Query\n{self.query}\n\n" + walk(self.root_node)
+
+    def to_html(self) -> str:
+        def walk(node: ResearchNode, level: int = 2) -> str:
+            text = f"<h{level}>{node.title}</h{level}>\n"
+            if node.content:
+                text += f"<p>{node.content.strip()}</p>\n"
+            if node.summary:
+                text += f"<p><strong>Summary:</strong> {node.summary.strip()}</p>\n"
+            if node.conclusion:
+                text += f"<p><strong>Conclusion:</strong> {node.conclusion.strip()}</p>\n"
+            for sn in node.subnodes:
+                text += walk(sn, level + 1)
+            return text
+
+        return f"<h1>Research Article</h1>\n<h2>Query</h2><p>{self.query}</p>\n" + walk(self.root_node)
 
     def all_nodes(self) -> List[ResearchNode]:
         nodes = []
