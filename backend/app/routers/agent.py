@@ -70,7 +70,7 @@ def generate_subquestions(session_id: str):
 
     return {
         "session_id": session_id,
-        "query": query,
+        "query": tree.query,
         "subquestions": subq
     }
 
