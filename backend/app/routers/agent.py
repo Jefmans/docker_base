@@ -61,13 +61,12 @@ async def start_query_session(request: AgentQueryRequest):
 
 @router.post("/agent/subquestions")
 def generate_subquestions(session_id: str):
-    session = get_session_chunks_db(session_id)
-    if not session:
-        raise HTTPException(status_code=404, detail="Session not found")
+    tree = get_research_tree_db(session_id)
+    if not tree:
+        raise HTTPException(status_code=404, detail="ResearchTree not found")
 
-    query = session["query"]
-    chunks = session["chunks"]
-    subq = generate_subquestions_from_chunks(chunks, query)
+    chunks = [c.text for c in tree.root_node.all_chunks()]
+    subq = generate_subquestions_from_chunks(chunks, tree.query)
 
     return {
         "session_id": session_id,
