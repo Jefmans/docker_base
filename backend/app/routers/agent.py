@@ -107,7 +107,7 @@ def create_outline(session_id: str):
         "session_id": session_id,
         "outline": outline.dict(),
         "node_count": len(tree.root_node.subnodes),
-        "tree": tree.model_dump()
+        # "tree": tree.model_dump()
     }
 
 
