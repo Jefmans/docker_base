@@ -8,11 +8,21 @@ from langchain_openai import ChatOpenAI
 
 
 
+from typing import List, Optional
+from pydantic import BaseModel
+
 class OutlineSection(BaseModel):
     heading: str
-    goals: str
-    questions: List[str]
-    subsections: List[OutlineSection] = []
+    goals: Optional[str] = None
+    questions: List[str] = []
+    subsections: List["OutlineSection"] = []
+
+    class Config:
+        arbitrary_types_allowed = True
+
+OutlineSection.update_forward_refs()
+
+
 
 class Outline(BaseModel):
     title: str

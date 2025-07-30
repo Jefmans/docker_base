@@ -81,17 +81,35 @@ def create_outline(session_id: str):
     if not tree:
         raise HTTPException(status_code=404, detail="ResearchTree not found")
 
+    # Step 1: Get all chunks
     chunks = [c.text for c in tree.root_node.all_chunks()]
+
+    # Step 2: Generate outline from LLM
     outline = generate_outline(chunks, tree.query)
 
-    # Refactor: convert outline to subnodes
-    tree.root_node.subnodes = [ResearchTree.node_from_outline_section(section) for section in outline.sections]
+    # Step 3: Build full node structure from outline
+    tree.root_node.subnodes = [
+        ResearchTree.node_from_outline_section(section) for section in outline.sections
+    ]
+
+    # ✅ NEW: attach outline metadata (optional, but nice)
+    tree.root_node.title = outline.title or tree.root_node.title
+    tree.root_node.questions = [q for sec in outline.sections for q in sec.questions]
+
+    # ✅ NEW: Save outline inside the session (DB version)
+    session = get_session_chunks_db(session_id)
+    session["outline"] = outline.dict()
+
+    # Save back to database
     save_research_tree_db(session_id, tree)
 
     return {
         "session_id": session_id,
-        "outline": outline
+        "outline": outline.dict(),
+        "node_count": len(tree.root_node.subnodes),
+        "tree": tree.model_dump()
     }
+
 
 
 @router.post("/agent/section/{section_id}")

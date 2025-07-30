@@ -27,6 +27,17 @@ class ResearchNode(BaseModel):
     parent: Optional["ResearchNode"] = None
     subnodes: List["ResearchNode"] = []
 
+    @staticmethod
+    def from_outline_section(section: OutlineSection) -> "ResearchNode":
+        return ResearchNode(
+            title=section.heading,
+            questions=section.questions,
+            subnodes=[
+                ResearchNode.from_outline_section(sub)
+                for sub in section.subsections
+            ]
+        )
+
     class Config:
         arbitrary_types_allowed = True
         underscore_attrs_are_private = True
@@ -61,6 +72,8 @@ class ResearchNode(BaseModel):
 
     def needs_expansion(self) -> bool:
         return not self.content or self.needs_more_chunks() or not self.summary
+
+ResearchNode.update_forward_refs()
 
 
 class ResearchTree(BaseModel):
@@ -108,15 +121,18 @@ class ResearchTree(BaseModel):
     
     @staticmethod
     def node_from_outline_section(section: OutlineSection) -> ResearchNode:
-        return ResearchNode(
+        node = ResearchNode(
             title=section.heading,
+            questions=section.questions,
+            generated_questions=[],
             chunks=[],
-            subnodes=[
-                ResearchTree.node_from_outline_section(sub) for sub in section.subsections or []
-            ],
-            parent=None,
             is_final=False,
         )
+        # Recursively add subsections
+        for sub in section.subsections or []:
+            node.add_subnode(ResearchTree.node_from_outline_section(sub))
+        return node
+
 
     def to_markdown(self) -> str:
         def walk(node: ResearchNode, level: int = 2) -> str:
