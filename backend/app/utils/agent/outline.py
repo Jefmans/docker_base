@@ -12,7 +12,7 @@ class OutlineSection(BaseModel):
     heading: str
     goals: str
     questions: List[str]
-    subsections = List[OutlineSection] = []
+    subsections: List[OutlineSection] = []
 
 class Outline(BaseModel):
     title: str
