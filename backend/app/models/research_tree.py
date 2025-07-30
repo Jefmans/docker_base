@@ -66,6 +66,7 @@ class ResearchTree(BaseModel):
     root_node: ResearchNode
     used_questions: Set[str] = set()
     used_chunk_ids: Set[str] = set()
+    outline: Optional[Outline] = None  # ✅ Add this line
 
     class Config:
         arbitrary_types_allowed = True
