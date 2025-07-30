@@ -53,7 +53,7 @@ def save_research_tree_db(session_id: str, tree: ResearchTree):
 
         existing = db.query(SessionModel).filter_by(id=session_id).first()
         if existing:
-            existing.tree = tree_dict
+            existing.tree = tree.model_dump_jsonable()
         else:
             db.add(SessionModel(id=session_id, query=tree.query, tree=tree_dict))
         db.commit()
