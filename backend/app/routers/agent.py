@@ -77,17 +77,16 @@ def generate_subquestions(session_id: str):
 
 @router.post("/agent/outline")
 def create_outline(session_id: str):
-    session = get_session_chunks_db(session_id)
-    if not session or "query" not in session or "chunks" not in session:
-        raise HTTPException(status_code=404, detail="Session not found")
+    tree = get_research_tree_db(session_id)
+    if not tree:
+        raise HTTPException(status_code=404, detail="ResearchTree not found")
 
-    subq = generate_subquestions_from_chunks(session["chunks"], session["query"])
-    outline = generate_outline(subq, session["query"])
+    chunks = [c.text for c in tree.root_node.all_chunks()]
+    subq = generate_subquestions_from_chunks(chunks, tree.query)
+    outline = generate_outline(subq, tree.query)
+    tree.outline = outline
 
-    # ✅ Save it!
-    session["outline"] = outline.dict()
-    save_session_chunks_db(session_id, session["query"], session["chunks"])  # resave session with outline
-    print(session)
+    save_research_tree_db(session_id, tree)
 
     return {
         "session_id": session_id,
