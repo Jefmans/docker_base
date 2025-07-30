@@ -82,15 +82,15 @@ def create_outline(session_id: str):
         raise HTTPException(status_code=404, detail="ResearchTree not found")
 
     chunks = [c.text for c in tree.root_node.all_chunks()]
-    subq = generate_subquestions_from_chunks(chunks, tree.query)
-    outline = generate_outline(subq, tree.query)
-    tree.outline = outline
+    outline = generate_outline(chunks, tree.query)
 
+    # Refactor: convert outline to subnodes
+    tree.root_node.subnodes = [ResearchTree.node_from_outline_section(section) for section in outline.sections]
     save_research_tree_db(session_id, tree)
 
     return {
         "session_id": session_id,
-        "outline": outline.dict()
+        "outline": outline
     }
 
 
