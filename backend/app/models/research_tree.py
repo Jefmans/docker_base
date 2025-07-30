@@ -1,5 +1,7 @@
 from typing import List, Optional, Dict, Set
 from pydantic import BaseModel
+from app.utils.agent.outline import OutlineSection
+
 
 
 class Chunk(BaseModel):
@@ -103,6 +105,18 @@ class ResearchTree(BaseModel):
                 dedup(sn)
         dedup(self.root_node)
         self.used_questions = seen
+    
+    @staticmethod
+    def node_from_outline_section(section: OutlineSection) -> ResearchNode:
+        return ResearchNode(
+            title=section.heading,
+            chunks=[],
+            subnodes=[
+                ResearchTree.node_from_outline_section(sub) for sub in section.subsections or []
+            ],
+            parent=None,
+            is_final=False,
+        )
 
     def to_markdown(self) -> str:
         def walk(node: ResearchNode, level: int = 2) -> str:
