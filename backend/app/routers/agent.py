@@ -349,3 +349,23 @@ def export_pdf_via_latex(session_id: str):
         media_type="application/pdf",
         headers={"Content-Disposition": f"attachment; filename=article.pdf"}
     )
+
+@router.get("/agent/export/tree_content")
+def export_tree_content(session_id: str):
+    tree = get_research_tree_db(session_id)
+    if not tree:
+        raise HTTPException(status_code=404, detail="Session not found")
+
+    def serialize_node(node):
+        return {
+            "title": node.title,
+            "content": node.content,
+            "summary": node.summary,
+            "conclusion": node.conclusion,
+            "subnodes": [serialize_node(sub) for sub in node.subnodes],
+        }
+
+    return {
+        "query": tree.query,
+        "root_node": serialize_node(tree.root_node)
+    }
