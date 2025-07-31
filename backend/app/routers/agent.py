@@ -10,13 +10,14 @@ from app.utils.agent.session_memory_db import (
 )
 from app.utils.agent.subquestions import generate_subquestions_from_chunks
 from app.utils.agent.outline import generate_outline, Outline
-from app.utils.agent.writer import write_section
+from app.utils.agent.writer import write_section, write_summary, write_conclusion
 import json
 from app.utils.agent.finalizer import finalize_article_from_tree
 from app.models.research_tree import ResearchTree, ResearchNode, Chunk
 from fastapi.responses import JSONResponse
 from fastapi.encoders import jsonable_encoder
-from app.utils.agent.writer import write_summary, write_conclusion
+from app.utils.agent.controller import should_deepen_node
+from app.utils.agent.expander import enrich_node_with_chunks_and_subquestions, deepen_node_with_subquestions
 
 
 
@@ -152,7 +153,6 @@ def write_section_by_id(session_id: str, section_id: int):
 
 @router.post("/agent/expand/{section_id}")
 def expand_section(session_id: str, section_id: int, top_k: int = 5):
-    from app.utils.agent.expander import enrich_node_with_chunks_and_subquestions
     tree = get_research_tree_db(session_id)
     if not tree:
         raise HTTPException(status_code=404, detail="ResearchTree not found")
@@ -172,6 +172,40 @@ def expand_section(session_id: str, section_id: int, top_k: int = 5):
         "new_chunks": [c.text[:100] for c in node.chunks],
         "generated_questions": node.generated_questions
     }
+
+
+@router.post("/agent/deepen/{section_id}")
+def deepen_section(session_id: str, section_id: int, top_k: int = 5):
+    tree = get_research_tree_db(session_id)
+    if not tree:
+        raise HTTPException(status_code=404, detail="ResearchTree not found")
+
+    if section_id < 0 or section_id >= len(tree.root_node.subnodes):
+        raise HTTPException(status_code=400, detail="Invalid section_id")
+
+    node = tree.root_node.subnodes[section_id]
+
+    if not node.generated_questions:
+        return {
+            "status": "skipped",
+            "reason": "No generated subquestions — run /expand first"
+        }
+
+    should_expand = should_deepen_node(node)
+    if should_expand:
+        deepen_node_with_subquestions(node, tree, top_k=top_k)
+        save_research_tree_db(session_id, tree)
+        return {
+            "status": "deepened",
+            "new_chunks": [c.text[:100] for c in node.chunks],
+            "used_questions": node.generated_questions
+        }
+    else:
+        return {
+            "status": "skipped",
+            "reason": "Subquestions too similar to existing questions — no useful gain"
+        }
+
 
 
 @router.post("/agent/section/complete/{section_id}")
