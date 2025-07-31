@@ -114,53 +114,41 @@ def create_outline(session_id: str):
 
 @router.post("/agent/section/{section_id}")
 def write_section_by_id(session_id: str, section_id: int):
-    # Step 1: Load full tree
+    # Step 1: Load full ResearchTree from DB
     tree = get_research_tree_db(session_id)
     if not tree:
         raise HTTPException(status_code=404, detail="ResearchTree not found")
 
-    # Step 2: Load outline (needed for section metadata)
-    session = get_session_chunks_db(session_id)
-    outline_data = session.get("outline")
-    if not outline_data:
-        raise HTTPException(status_code=404, detail="Outline not found in session")
-
-    if isinstance(outline_data, str):
-        import json
-        outline_data = json.loads(outline_data)
-
-    from app.utils.agent.outline import Outline
-    outline = Outline(**outline_data)
-
-    # Step 3: Validate section index
-    if section_id < 0 or section_id >= len(outline.sections):
+    # Step 2: Get top-level section node from root
+    if section_id < 0 or section_id >= len(tree.root_node.subnodes):
         raise HTTPException(status_code=400, detail="Invalid section_id")
 
-    section = outline.sections[section_id]
-    title = section.heading
+    node = tree.root_node.subnodes[section_id]
 
-    # Step 4: Locate corresponding node in tree
-    node = tree.root_node.find_node_by_title(title)
-    if not node:
-        raise HTTPException(status_code=404, detail=f"No node found for section '{title}'")
+    # Step 3: Prepare section dictionary for writing
+    section_data = {
+        "heading": node.title,
+        "goals": "",  # You can optionally extract or store `goals` in the node
+        "questions": node.questions or [],
+    }
 
-    # Step 5: Write the section using LLM
-    section_dict = section.dict()
-    generated_text = write_section(section_dict)
+    # Step 4: Generate content
+    generated_text = write_section(section_data)
 
-    # Step 6: Update tree node
+    # Step 5: Save content into the node
     node.content = generated_text
     node.mark_final()
 
-    # Step 7: Save updated tree
+    # Step 6: Save updated tree back to DB
     save_research_tree_db(session_id, tree)
 
     return {
         "session_id": session_id,
         "section_id": section_id,
-        "heading": title,
+        "heading": node.title,
         "text": generated_text
     }
+
 
 
 
