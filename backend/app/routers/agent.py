@@ -114,43 +114,45 @@ def create_outline(session_id: str):
 
 @router.post("/agent/section/{section_id}")
 def write_section_by_id(session_id: str, section_id: int):
-    # Load full research tree
+    # Step 1: Load full tree
     tree = get_research_tree_db(session_id)
     if not tree:
         raise HTTPException(status_code=404, detail="ResearchTree not found")
 
-    # Retrieve outline from DB session (for metadata like goals)
+    # Step 2: Load outline (needed for section metadata)
     session = get_session_chunks_db(session_id)
     outline_data = session.get("outline")
     if not outline_data:
         raise HTTPException(status_code=404, detail="Outline not found in session")
+
     if isinstance(outline_data, str):
+        import json
         outline_data = json.loads(outline_data)
 
     from app.utils.agent.outline import Outline
     outline = Outline(**outline_data)
 
-    # Validate section ID
-    if section_id >= len(outline.sections):
+    # Step 3: Validate section index
+    if section_id < 0 or section_id >= len(outline.sections):
         raise HTTPException(status_code=400, detail="Invalid section_id")
 
-    # Match section title and extract metadata
     section = outline.sections[section_id]
     title = section.heading
 
-    # Locate node in the tree by title
+    # Step 4: Locate corresponding node in tree
     node = tree.root_node.find_node_by_title(title)
     if not node:
-        raise HTTPException(status_code=404, detail=f"Node with title '{title}' not found in tree")
+        raise HTTPException(status_code=404, detail=f"No node found for section '{title}'")
 
-    # Generate content using writer
-    generated_text = write_section(section.dict())
+    # Step 5: Write the section using LLM
+    section_dict = section.dict()
+    generated_text = write_section(section_dict)
 
-    # Update node
+    # Step 6: Update tree node
     node.content = generated_text
     node.mark_final()
 
-    # Save updated tree
+    # Step 7: Save updated tree
     save_research_tree_db(session_id, tree)
 
     return {
@@ -159,6 +161,7 @@ def write_section_by_id(session_id: str, section_id: int):
         "heading": title,
         "text": generated_text
     }
+
 
 
 
