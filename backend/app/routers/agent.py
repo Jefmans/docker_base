@@ -12,7 +12,7 @@ from app.utils.agent.subquestions import generate_subquestions_from_chunks
 from app.utils.agent.outline import generate_outline, Outline
 from app.utils.agent.writer import write_section
 import json
-from app.utils.agent.finalizer import finalize_article
+from app.utils.agent.finalizer import finalize_article_from_tree
 from app.models.research_tree import ResearchTree, ResearchNode, Chunk
 from app.utils.agent.memory import get_research_tree
 from fastapi.responses import JSONResponse
