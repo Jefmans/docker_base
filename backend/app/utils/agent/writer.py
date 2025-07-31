@@ -5,6 +5,7 @@ import logging
 from app.models.research_tree import ResearchNode
 
 
+
 logger = logging.getLogger(__name__)
 llm = ChatOpenAI(model="gpt-4o", temperature=0)
 
