@@ -77,3 +77,17 @@ def process_node_recursively(node: ResearchNode, tree: ResearchTree, top_k: int 
     # 4. Recurse through subnodes
     for subnode in node.subnodes:
         process_node_recursively(subnode, tree, top_k=top_k)
+
+def export_tree_to_pdf(tree: ResearchTree, output_pdf="output.pdf"):
+    import subprocess
+    import tempfile
+    tex = tree.to_latex()
+
+    with tempfile.TemporaryDirectory() as tmpdir:
+        tex_path = f"{tmpdir}/doc.tex"
+        pdf_path = f"{tmpdir}/doc.pdf"
+        with open(tex_path, "w") as f:
+            f.write(tex)
+        subprocess.run(["pdflatex", "-interaction=nonstopmode", tex_path], cwd=tmpdir)
+        with open(pdf_path, "rb") as f:
+            return f.read()  # returns binary PDF bytes

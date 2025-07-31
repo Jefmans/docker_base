@@ -14,12 +14,10 @@ from app.utils.agent.writer import write_section, write_summary, write_conclusio
 import json
 from app.utils.agent.finalizer import finalize_article_from_tree
 from app.models.research_tree import ResearchTree, ResearchNode, Chunk
-from fastapi.responses import JSONResponse
+from fastapi.responses import JSONResponse, Response
 from fastapi.encoders import jsonable_encoder
 from app.utils.agent.controller import should_deepen_node
-from app.utils.agent.expander import enrich_node_with_chunks_and_subquestions, deepen_node_with_subquestions, process_node_recursively
-
-
+from app.utils.agent.expander import enrich_node_with_chunks_and_subquestions, deepen_node_with_subquestions, process_node_recursively, export_tree_to_pdf
 
 
 
@@ -336,3 +334,18 @@ def get_tree(session_id: str):
 
     return JSONResponse(content=tree.model_dump_jsonable())
 
+
+
+
+@router.get("/agent/export/pdf_latex")
+def export_pdf_via_latex(session_id: str):
+    tree = get_research_tree_db(session_id)
+    if not tree:
+        raise HTTPException(status_code=404, detail="Session not found")
+
+    pdf_bytes = export_tree_to_pdf(tree)
+    return Response(
+        content=pdf_bytes,
+        media_type="application/pdf",
+        headers={"Content-Disposition": f"attachment; filename=article.pdf"}
+    )
