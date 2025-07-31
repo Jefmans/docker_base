@@ -14,9 +14,10 @@ from app.utils.agent.writer import write_section
 import json
 from app.utils.agent.finalizer import finalize_article_from_tree
 from app.models.research_tree import ResearchTree, ResearchNode, Chunk
-from app.utils.agent.memory import get_research_tree
 from fastapi.responses import JSONResponse
 from fastapi.encoders import jsonable_encoder
+from app.utils.agent.writer import write_summary, write_conclusion
+
 
 
 
@@ -150,10 +151,30 @@ def write_section_by_id(session_id: str, section_id: int):
     }
 
 
+@router.post("/agent/section/complete/{section_id}")
+def complete_section(session_id: str, section_id: int):
+    tree = get_research_tree_db(session_id)
+    if not tree:
+        raise HTTPException(status_code=404, detail="ResearchTree not found")
+
+    if section_id < 0 or section_id >= len(tree.root_node.subnodes):
+        raise HTTPException(status_code=400, detail="Invalid section_id")
+
+    node = tree.root_node.subnodes[section_id]
+    node.summary = write_summary(node)
+    node.conclusion = write_conclusion(node)
+    save_research_tree_db(session_id, tree)
+
+    return {
+        "status": "success",
+        "section_id": section_id,
+        "summary": node.summary,
+        "conclusion": node.conclusion
+    }
 
 
 
-from app.utils.agent.finalizer import finalize_article_from_tree
+
 
 @router.post("/agent/article/finalize")
 def finalize_article_route(session_id: str):

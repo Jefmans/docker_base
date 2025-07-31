@@ -42,3 +42,37 @@ def write_section(section: dict) -> str:
             {questions}
             """
     return llm.invoke(prompt).content.strip()
+
+
+def write_summary(node: ResearchNode) -> str:
+    context = "\n\n".join(c.text for c in node.chunks[:20])
+    if not context.strip():
+        return f"(No summary available for: {node.title})"
+
+    prompt = f"""
+        You are a scientific summarizer.
+        Summarize the section titled "{node.title}" based only on the CONTEXT below.
+
+        CONTEXT:
+        {context}
+
+        Write a concise, informative summary of 3–6 sentences.
+    """
+    return llm.invoke(prompt).content.strip()
+
+
+def write_conclusion(node: ResearchNode) -> str:
+    context = "\n\n".join(c.text for c in node.chunks[:20])
+    if not context.strip():
+        return f"(No conclusion available for: {node.title})"
+
+    prompt = f"""
+        You are a scientific assistant.
+        Based on the CONTEXT, write a concluding paragraph for the section titled "{node.title}".
+
+        CONTEXT:
+        {context}
+
+        The conclusion should briefly reflect on the key findings or implications of the section.
+    """
+    return llm.invoke(prompt).content.strip()
