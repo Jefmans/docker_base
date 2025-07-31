@@ -171,41 +171,57 @@ def finalize_article_route(session_id: str):
 
 
 
-
 @router.post("/agent/full_run")
-def full_run(request: AgentQueryRequest, background_tasks: BackgroundTasks = None):
+def full_run(request: AgentQueryRequest):
     try:
-        # STEP 1: Query & retrieve chunks
+        # STEP 1: Generate session ID
         session_id = str(uuid4())
+
+        # STEP 2: Search top-k chunks
         top_chunks = search_chunks(request.query, top_k=request.top_k)
-        save_session_chunks_db(session_id, request.query, top_chunks)
+        chunk_objs = [Chunk(id=str(i), text=c, page=None, source=None) for i, c in enumerate(top_chunks)]
 
-        # STEP 2: Subquestions
+        # STEP 3: Build root ResearchTree
+        root_node = ResearchNode(title=request.query, chunks=chunk_objs)
+        tree = ResearchTree(query=request.query, root_node=root_node)
+
+        # STEP 4: Generate subquestions and outline
         subq = generate_subquestions_from_chunks(top_chunks, request.query)
-
-        # STEP 3: Outline
         outline = generate_outline(subq, request.query)
-        session = get_session_chunks_db(session_id)
-        session["outline"] = outline.dict()
 
-        # STEP 4: Write each section
+        # STEP 5: Attach outline to tree
+        tree.root_node.title = outline.title or request.query
+        tree.root_node.questions = [q for s in outline.sections for q in s.questions]
+        tree.root_node.subnodes = [
+            ResearchTree.node_from_outline_section(s) for s in outline.sections
+        ]
+
+        # STEP 6: Write content per section
         section_outputs = []
-        for i, section in enumerate(outline.sections):
-            text = write_section(section.dict())
-            save_section_db(session_id, i, text)
+        for i, node in enumerate(tree.root_node.subnodes):
+            section_data = {
+                "heading": node.title,
+                "goals": "",  # if you want to use `goals`, add it to ResearchNode
+                "questions": node.questions
+            }
+            text = write_section(section_data)
+            node.content = text
+            node.mark_final()
             section_outputs.append({
-                "heading": section.heading,
+                "heading": node.title,
                 "text": text
             })
 
-        # STEP 5: Finalize article
-        session["session_id"] = session_id
-        article = finalize_article(session)
+        # STEP 7: Save full tree to DB
+        save_research_tree_db(session_id, tree)
+
+        # STEP 8: Finalize article from tree
+        article = finalize_article_from_tree(tree)
 
         return {
             "session_id": session_id,
-            "title": outline.title,
-            "abstract": outline.abstract,
+            "title": tree.root_node.title,
+            "abstract": tree.root_node.content or "",
             "outline": [s.dict() for s in outline.sections],
             "sections": section_outputs,
             "article": article
@@ -213,9 +229,6 @@ def full_run(request: AgentQueryRequest, background_tasks: BackgroundTasks = Non
 
     except Exception as e:
         raise HTTPException(status_code=500, detail=str(e))
-
-
-
 
 
 
