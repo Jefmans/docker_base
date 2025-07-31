@@ -194,3 +194,39 @@ class ResearchTree(BaseModel):
             "used_questions": list(self.used_questions),
             "used_chunk_ids": list(self.used_chunk_ids)
     }
+
+    def to_latex(self) -> str:
+        def escape_latex(text: str) -> str:
+            replacements = {
+                "&": "\\&", "%": "\\%", "$": "\\$", "#": "\\#",
+                "_": "\\_", "{": "\\{", "}": "\\}", "~": "\\textasciitilde{}",
+                "^": "\\textasciicircum{}", "\\": "\\textbackslash{}",
+            }
+            for key, val in replacements.items():
+                text = text.replace(key, val)
+            return text
+
+        def walk(node, level: int = 1) -> str:
+            parts = []
+            section_cmd = ["section", "subsection", "subsubsection", "paragraph"]
+            cmd = section_cmd[min(level, len(section_cmd)-1)]
+
+            parts.append(f"\\{cmd}{{{escape_latex(node.title)}}}\n")
+            if node.content:
+                parts.append(escape_latex(node.content) + "\n")
+            if node.summary:
+                parts.append(f"\\textbf{{Summary}}: {escape_latex(node.summary)}\n")
+            if node.conclusion:
+                parts.append(f"\\textbf{{Conclusion}}: {escape_latex(node.conclusion)}\n")
+
+            for chunk in node.chunks:
+                if chunk.source and chunk.page is not None:
+                    parts.append(f"\\textit{{[source: {escape_latex(chunk.source)}, page {chunk.page}]}}\n")
+
+            for sub in node.subnodes:
+                parts.append(walk(sub, level + 1))
+            return "\n".join(parts)
+
+        body = walk(self.root_node)
+
+        return f"\"\"\n\\documentclass{{article}}\n\\usepackage[utf8]{{inputenc}}\n\\usepackage{{hyperref}}\n\\title{{{escape_latex(self.query)}}}\n\\begin{{document}}\n\\maketitle\n\n{body}\n\n\\end{{document}}\n\"\""
