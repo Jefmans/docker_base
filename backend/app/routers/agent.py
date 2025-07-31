@@ -155,18 +155,46 @@ def write_section_by_id(session_id: str, section_id: int):
 
 @router.post("/agent/article/finalize")
 def finalize_article_route(session_id: str):
-    session = get_session_chunks_db(session_id)
-    if not session:
-        raise HTTPException(status_code=404, detail="Session not found")
+    tree = get_research_tree_db(session_id)
+    if not tree:
+        raise HTTPException(status_code=404, detail="ResearchTree not found")
 
-    # Make sure session includes the sections
-    session["session_id"] = session_id  # Needed for get_all_sections
-    article_text = finalize_article(session)
+    # Use title and abstract if available
+    title = tree.root_node.title or "Untitled Article"
+    abstract = ""
+    if tree.root_node.content:
+        abstract = tree.root_node.content.strip()
+
+    # Start building article
+    parts = [f"# {title}\n"]
+    if abstract:
+        parts.append(f"**Abstract:** {abstract}\n")
+
+    def walk(node: ResearchNode, level: int = 2) -> List[str]:
+        lines = [f"{'#' * level} {node.title}\n"]
+        if node.content:
+            lines.append(node.content.strip() + "\n")
+        if node.summary:
+            lines.append(f"**Summary:** {node.summary.strip()}\n")
+        if node.conclusion:
+            lines.append(f"**Conclusion:** {node.conclusion.strip()}\n")
+        for sub in node.subnodes:
+            lines.extend(walk(sub, level + 1))
+        return lines
+
+    # Write all subnodes (sections)
+    for section in tree.root_node.subnodes:
+        parts.extend(walk(section, level=2))
+
+    # Optional: add placeholder conclusion
+    parts.append("## Conclusion\n\n(Conclusion not generated. Add manually if needed.)")
+
+    article = "\n".join(parts).strip()
 
     return {
         "session_id": session_id,
-        "title": session.get("outline", {}).get("title", "Untitled Article"),
-        "article": article_text
+        "title": title,
+        "article": article
     }
 
 
