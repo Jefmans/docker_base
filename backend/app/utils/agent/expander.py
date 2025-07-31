@@ -1,7 +1,8 @@
 from app.utils.agent.search_chunks import search_chunks
 from app.utils.agent.subquestions import generate_subquestions_from_chunks
 from app.models.research_tree import ResearchNode, ResearchTree, Chunk
-
+from app.utils.agent.controller import should_deepen_node
+from app.utils.agent.writer import write_section, write_summary, write_conclusion
 
 
 def enrich_node_with_chunks_and_subquestions(node: ResearchNode, tree: ResearchTree, top_k: int = 10):
@@ -49,3 +50,30 @@ def deepen_node_with_subquestions(node, tree, top_k=5):
                 node.chunks.append(chunk)
                 node.chunk_ids.add(chunk_id)
                 tree.used_chunk_ids.add(chunk_id)
+
+
+
+
+
+def process_node_recursively(node: ResearchNode, tree: ResearchTree, top_k: int = 10):
+    # 1. Enrich with chunks and subquestions
+    enrich_node_with_chunks_and_subquestions(node, tree, top_k=top_k)
+
+    # 2. Deepen if necessary (i.e. add new chunks via subquestions)
+    if should_deepen_node(node):
+        deepen_node_with_subquestions(node, tree, top_k=top_k)
+
+    # 3. Write section content
+    section_data = {
+        "heading": node.title,
+        "goals": "",
+        "questions": node.questions or [],
+    }
+    node.content = write_section(section_data)
+    node.summary = write_summary(node)
+    node.conclusion = write_conclusion(node)
+    node.mark_final()
+
+    # 4. Recurse through subnodes
+    for subnode in node.subnodes:
+        process_node_recursively(subnode, tree, top_k=top_k)

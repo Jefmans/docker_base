@@ -17,7 +17,7 @@ from app.models.research_tree import ResearchTree, ResearchNode, Chunk
 from fastapi.responses import JSONResponse
 from fastapi.encoders import jsonable_encoder
 from app.utils.agent.controller import should_deepen_node
-from app.utils.agent.expander import enrich_node_with_chunks_and_subquestions, deepen_node_with_subquestions
+from app.utils.agent.expander import enrich_node_with_chunks_and_subquestions, deepen_node_with_subquestions, process_node_recursively
 
 
 
@@ -230,6 +230,23 @@ def complete_section(session_id: str, section_id: int):
     }
 
 
+
+@router.post("/agent/complete_tree")
+def complete_full_tree(session_id: str, top_k: int = 10):
+    tree = get_research_tree_db(session_id)
+    if not tree:
+        raise HTTPException(status_code=404, detail="ResearchTree not found")
+
+    process_node_recursively(tree.root_node, tree, top_k=top_k)
+    save_research_tree_db(session_id, tree)
+
+    return {
+        "status": "complete",
+        "title": tree.root_node.title,
+        "outline_depth": len(tree.root_node.subnodes),
+        "summary": tree.root_node.summary,
+        "conclusion": tree.root_node.conclusion,
+    }
 
 
 
