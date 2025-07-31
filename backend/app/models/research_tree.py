@@ -252,10 +252,15 @@ class ResearchTree(BaseModel):
             parts = []
             # Clean and strip title
             title_raw = clean_text(node.title)
+            print('title raw: ', title_raw)
             title_clean = re.sub(r"^\d+(?:\.\d+)*\s*", "", title_raw)  # Remove 0.1.2 prefix
+            print('title clean 1: ', title_clean)
             title_clean = re.sub(r"^\\+", "", title_clean)  # Remove starting backslashes
+            print('title clean 2: ', title_clean)
             title_clean = title_clean.replace("\\", "")
+            print('title clean 3: ', title_clean)
             title = escape_latex(title_clean)
+            print('title: ', title)
 
             section_cmd = ["section", "subsection", "subsubsection", "paragraph"]
             cmd = section_cmd[min(level, len(section_cmd)-1)]
