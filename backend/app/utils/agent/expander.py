@@ -81,7 +81,7 @@ def process_node_recursively(node: ResearchNode, tree: ResearchTree, top_k: int 
 def export_tree_to_pdf(tree: ResearchTree, output_pdf="output.pdf"):
     import subprocess
     import tempfile
-    tex = tree.to_latex()
+    tex = tree.to_latex_styled()
 
     with tempfile.TemporaryDirectory() as tmpdir:
         tex_path = f"{tmpdir}/doc.tex"
@@ -90,4 +90,4 @@ def export_tree_to_pdf(tree: ResearchTree, output_pdf="output.pdf"):
             f.write(tex)
         subprocess.run(["pdflatex", "-interaction=nonstopmode", tex_path], cwd=tmpdir)
         with open(pdf_path, "rb") as f:
-            return f.read()  # returns binary PDF bytes
+            return f.read()
