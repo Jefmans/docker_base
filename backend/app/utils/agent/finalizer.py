@@ -1,23 +1,27 @@
-from app.utils.agent.outline import Outline
-import json
+from app.models.research_tree import ResearchTree
 
-def finalize_article(session_data: dict) -> str:
-    if "outline" not in session_data or "query" not in session_data:
-        return "❌ Missing outline or query."
+def finalize_article_from_tree(tree: ResearchTree) -> str:
+    title = tree.root_node.title or "Untitled Article"
+    abstract = tree.root_node.content.strip() if tree.root_node.content else ""
 
-    outline = Outline(**session_data["outline"]) if isinstance(session_data["outline"], dict) else Outline(**json.loads(session_data["outline"]))
-    session_id = session_data["session_id"]
-    all_sections = session_data.get("sections") or {}
+    parts = [f"# {title}\n"]
+    if abstract:
+        parts.append(f"**Abstract:** {abstract}\n")
 
-    stitched = f"# {outline.title}\n\n"
-    stitched += f"**Abstract:** {outline.abstract}\n\n"
+    def walk(node, level: int = 2):
+        lines = [f"{'#' * level} {node.title}\n"]
+        if node.content:
+            lines.append(node.content.strip() + "\n")
+        if node.summary:
+            lines.append(f"**Summary:** {node.summary.strip()}\n")
+        if node.conclusion:
+            lines.append(f"**Conclusion:** {node.conclusion.strip()}\n")
+        for sub in node.subnodes:
+            lines.extend(walk(sub, level + 1))
+        return lines
 
-    for i, section in enumerate(outline.sections):
-        text = all_sections.get(i, "").strip()
-        if not text:
-            continue
-        stitched += f"## {section.heading}\n\n{text}\n\n"
+    for section in tree.root_node.subnodes:
+        parts.extend(walk(section, level=2))
 
-    stitched += "## Conclusion\n\n(Conclusion not generated. Add manually if needed.)"
-
-    return stitched.strip()
+    parts.append("## Conclusion\n\n(Conclusion not generated. Add manually if needed.)")
+    return "\n".join(parts).strip()
