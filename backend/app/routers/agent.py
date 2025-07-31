@@ -114,30 +114,52 @@ def create_outline(session_id: str):
 
 @router.post("/agent/section/{section_id}")
 def write_section_by_id(session_id: str, section_id: int):
+    # Load full research tree
+    tree = get_research_tree_db(session_id)
+    if not tree:
+        raise HTTPException(status_code=404, detail="ResearchTree not found")
+
+    # Retrieve outline from DB session (for metadata like goals)
     session = get_session_chunks_db(session_id)
-    # print(session)
-    if not session or "outline" not in session:
-        raise HTTPException(status_code=404, detail="Session or outline missing")
-
-    outline_data = session["outline"]
+    outline_data = session.get("outline")
+    if not outline_data:
+        raise HTTPException(status_code=404, detail="Outline not found in session")
     if isinstance(outline_data, str):
-        outline_data = json.loads(outline_data)  # support old string-based storage
+        outline_data = json.loads(outline_data)
 
-    try:
-        outline = Outline(**outline_data)
-        section = outline.sections[section_id]
-        generated_text = write_section(section.dict())
-        save_section_db(session_id, section_id, generated_text)
+    from app.utils.agent.outline import Outline
+    outline = Outline(**outline_data)
 
-        return {
-            "session_id": session_id,
-            "section_id": section_id,
-            "heading": section.heading,
-            "text": generated_text
-        }
+    # Validate section ID
+    if section_id >= len(outline.sections):
+        raise HTTPException(status_code=400, detail="Invalid section_id")
 
-    except Exception as e:
-        raise HTTPException(status_code=500, detail=str(e))
+    # Match section title and extract metadata
+    section = outline.sections[section_id]
+    title = section.heading
+
+    # Locate node in the tree by title
+    node = tree.root_node.find_node_by_title(title)
+    if not node:
+        raise HTTPException(status_code=404, detail=f"Node with title '{title}' not found in tree")
+
+    # Generate content using writer
+    generated_text = write_section(section.dict())
+
+    # Update node
+    node.content = generated_text
+    node.mark_final()
+
+    # Save updated tree
+    save_research_tree_db(session_id, tree)
+
+    return {
+        "session_id": session_id,
+        "section_id": section_id,
+        "heading": title,
+        "text": generated_text
+    }
+
 
 
 @router.post("/agent/article/finalize")
