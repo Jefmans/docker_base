@@ -40,7 +40,7 @@ class ResearchNode(BaseModel):
 
     class Config:
         arbitrary_types_allowed = True
-        underscore_attrs_are_private = True
+        # underscore_attrs_are_private = True
         json_encoders = {
             "ResearchNode": lambda v: v.dict(exclude_none=True)
         }

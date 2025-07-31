@@ -2,6 +2,8 @@ from langchain_openai import ChatOpenAI
 from app.utils.vectorstore import get_vectorstore, get_caption_store
 from typing import List
 import logging
+from app.models.research_tree import ResearchNode
+
 
 logger = logging.getLogger(__name__)
 llm = ChatOpenAI(model="gpt-4o", temperature=0)
