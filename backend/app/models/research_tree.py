@@ -233,6 +233,8 @@ class ResearchTree(BaseModel):
 
 
     def to_latex_styled(self) -> str:
+        import re
+
         def escape_latex(text: str) -> str:
             replacements = {
                 "&": "\\&", "%": "\\%", "$": "\\$", "#": "\\#",
@@ -243,23 +245,40 @@ class ResearchTree(BaseModel):
                 text = text.replace(key, val)
             return text
 
+        def clean_text(text: str) -> str:
+            return text.replace("\\", "").replace("\n", " ").strip()
+
         def walk(node, level=1) -> str:
             parts = []
-            title = escape_latex(node.title.replace("\\", "").replace("\n", " ").strip())
+            # Clean and strip title
+            title_raw = clean_text(node.title)
+            title_clean = re.sub(r"^\d+(?:\.\d+)*\s*", "", title_raw)  # Remove 0.1.2 prefix
+            title_clean = re.sub(r"^\\+", "", title_clean)  # Remove starting backslashes
+            title_clean = title_clean.replace("\\", "")
+            title = escape_latex(title_clean)
+
             section_cmd = ["section", "subsection", "subsubsection", "paragraph"]
             cmd = section_cmd[min(level, len(section_cmd)-1)]
             parts.append(f"\\{cmd}{{{title}}}\n")
+
             if node.content:
-                parts.append(escape_latex(node.content) + "\n")
+                content_clean = escape_latex(clean_text(node.content))
+                parts.append(content_clean + "\n")
             if node.summary:
-                parts.append(f"\\textbf{{Summary}}: {escape_latex(node.summary)}\n")
+                summary_clean = escape_latex(clean_text(node.summary))
+                parts.append(f"\\textbf{{Summary}}: {summary_clean}\n")
             if node.conclusion:
-                parts.append(f"\\textbf{{Conclusion}}: {escape_latex(node.conclusion)}\n")
+                conclusion_clean = escape_latex(clean_text(node.conclusion))
+                parts.append(f"\\textbf{{Conclusion}}: {conclusion_clean}\n")
+
             for chunk in node.chunks:
                 if chunk.source and chunk.page is not None:
-                    parts.append(f"\\textit{{[source: {escape_latex(chunk.source)}, page {chunk.page}]}}\n")
+                    src = escape_latex(chunk.source)
+                    parts.append(f"\\textit{{[source: {src}, page {chunk.page}]}}\n")
+
             for sub in node.subnodes:
-                parts.append(walk(sub, level+1))
+                parts.append(walk(sub, level + 1))
+
             return "\n".join(parts)
 
         body = walk(self.root_node)
