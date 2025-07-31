@@ -235,8 +235,9 @@ def full_run(request: AgentQueryRequest):
 
 @router.get("/agent/tree/{session_id}")
 def get_tree(session_id: str):
-    tree = get_research_tree(session_id)
+    tree = get_research_tree_db(session_id)
     if not tree:
         raise HTTPException(status_code=404, detail="Session or tree not found")
 
-    return JSONResponse(content=jsonable_encoder(tree))
+    return JSONResponse(content=tree.model_dump_jsonable())
+
