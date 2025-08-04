@@ -142,20 +142,33 @@ class ResearchTree(BaseModel):
                 dedup(sn)
         dedup(self.root_node)
         self.used_questions = seen
-    
+        
     @staticmethod
-    def node_from_outline_section(section: OutlineSection) -> ResearchNode:
+    def node_from_outline_section(
+        section: OutlineSection,
+        parent: Optional["ResearchNode"] = None,
+        rank: int = 1,
+        level: int = 1
+    ) -> ResearchNode:
         node = ResearchNode(
             title=section.heading,
             questions=section.questions,
-            generated_questions=[],
-            chunks=[],
-            is_final=False,
+            parent=parent,
+            rank=rank,
+            level=level
         )
-        # Recursively add subsections
-        for sub in section.subsections or []:
-            node.add_subnode(ResearchTree.node_from_outline_section(sub))
+
+        for i, sub in enumerate(section.subsections or []):
+            child = ResearchTree.node_from_outline_section(
+                sub,
+                parent=node,
+                rank=i + 1,
+                level=level + 1
+            )
+            node.subnodes.append(child)
+
         return node
+
     
     def assign_rank_and_level(self):
         def _assign(node: ResearchNode, level: int = 1):
