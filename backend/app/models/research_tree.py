@@ -232,8 +232,8 @@ class ResearchTree(BaseModel):
                 "title": node.title,
                 "rank": node.rank,
                 "level": node.level,
-                "parent_rank":node.parent.rank,
-                "parent_level":node.parent.level,
+                "parent_rank":node.parent.rank if node.parent else None,
+                "parent_level":node.parent.level if node.parent else None,
                 "display_rank": node.display_rank, # ✅ computed property
                 # "ranked_title": node.ranked_title,  # ✅ computed property
                 "questions": node.questions,
