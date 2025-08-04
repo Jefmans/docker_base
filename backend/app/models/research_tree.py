@@ -85,6 +85,11 @@ class ResearchNode(BaseModel):
         if not self.parent:
             return str(self.rank or 1)
         return f"{self.parent.display_rank}.{self.rank or 1}"
+    
+    @property
+    def ranked_title(self):
+        return f"{self.display_rank} {self.title}"
+
 
 ResearchNode.update_forward_refs()
 
@@ -211,7 +216,8 @@ class ResearchTree(BaseModel):
                 "title": node.title,
                 "rank": node.rank,
                 "level": node.level,
-                "display_rank": node.display_rank,  # ✅ computed property
+                "display_rank": node.display_rank, # ✅ computed property
+                "ranked_title": node.ranked_title,  # ✅ computed property
                 "questions": node.questions,
                 "generated_questions": node.generated_questions,
                 "chunks": [c.dict() for c in node.chunks],
