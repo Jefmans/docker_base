@@ -105,6 +105,13 @@ class ResearchNode(BaseModel):
         for sub in self.subnodes:
             nodes.extend(sub.walk())
         return nodes
+    
+    @property
+    def parent_title(self) -> Optional[str]:
+        if self.parent:
+            return f"{self.parent.title}"
+        return None
+
 
 
 
