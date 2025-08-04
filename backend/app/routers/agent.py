@@ -93,7 +93,7 @@ def create_outline(session_id: str):
         for i, section in enumerate(outline.sections)
     ]
 
-    tree.assign_rank_and_level()
+    # tree.assign_rank_and_level()
 
 
     # ✅ NEW: attach outline metadata (optional, but nice)
