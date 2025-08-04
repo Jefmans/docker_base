@@ -30,6 +30,10 @@ class ResearchNode(BaseModel):
     rank: Optional[int] = None  # Format: '1.1', '2.1.1', etc.
     level: Optional[int] = None  # Format: '1.1', '2.1.1', etc.
 
+    def __str__(self):
+        return f"{self.title} : rank {self.rank} - level {self.level}"
+    
+
 
     @staticmethod
     def from_outline_section(section: OutlineSection, parent_rank: str = "") -> "ResearchNode":
@@ -89,6 +93,19 @@ class ResearchNode(BaseModel):
     @property
     def ranked_title(self):
         return f"{self.display_rank} {self.title}"
+    
+    def compute_display_rank(self) -> str:
+        if self.parent:
+            return f"{self.parent.compute_display_rank()}.{self.rank}"
+        return str(self.rank)
+
+    
+    def walk(self) -> List["ResearchNode"]:
+        nodes = [self]
+        for sub in self.subnodes:
+            nodes.extend(sub.walk())
+        return nodes
+
 
 
 ResearchNode.update_forward_refs()

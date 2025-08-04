@@ -97,6 +97,11 @@ def create_outline(session_id: str):
     tree.assign_rank_and_level()
 
 
+    for node in tree.root_node.walk():
+        print(f"{node.title} → parent: {node.parent.title if node.parent else 'None'}")
+
+
+
 
     # ✅ NEW: attach outline metadata (optional, but nice)
     tree.root_node.title = outline.title or tree.root_node.title
