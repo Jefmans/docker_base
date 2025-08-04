@@ -24,6 +24,8 @@ def get_context_for_questions(questions: List[str], top_k: int = 5) -> str:
 
 
 def write_section(node: ResearchNode) -> ResearchNode:
+    if isinstance(node, dict):
+        raise TypeError("Expected a ResearchNode, got dict.")
     prompt = f"""
     Write a detailed section titled "{node.title}" based on the following questions:
     {node.questions}

@@ -73,6 +73,8 @@ def process_node_recursively(node: ResearchNode, tree: ResearchTree, top_k: int 
     for subnode in node.subnodes:
         process_node_recursively(subnode, tree, top_k=top_k)
 
+        
+
 def export_tree_to_pdf(tree: ResearchTree, output_pdf="output.pdf"):
     import subprocess
     import tempfile

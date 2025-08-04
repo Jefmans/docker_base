@@ -91,6 +91,8 @@ def create_outline(session_id: str):
     tree.root_node.subnodes = [
         ResearchTree.node_from_outline_section(section) for section in outline.sections
     ]
+    tree.assign_rank_and_level()
+
 
     # ✅ NEW: attach outline metadata (optional, but nice)
     tree.root_node.title = outline.title or tree.root_node.title

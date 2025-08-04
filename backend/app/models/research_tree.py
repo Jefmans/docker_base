@@ -145,6 +145,16 @@ class ResearchTree(BaseModel):
         for sub in section.subsections or []:
             node.add_subnode(ResearchTree.node_from_outline_section(sub))
         return node
+    
+    def assign_rank_and_level(self):
+        def _assign(node: ResearchNode, base_rank: str = "1", base_level: int = 1):
+            node.rank = base_rank
+            node.level = base_level
+            for i, sub in enumerate(node.subnodes):
+                sub_rank = f"{base_rank}.{i+1}"
+                _assign(sub, sub_rank, base_level + 1)
+
+        _assign(self.root_node)
 
 
     def to_markdown(self) -> str:
