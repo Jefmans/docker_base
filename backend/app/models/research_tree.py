@@ -162,12 +162,15 @@ class ResearchTree(BaseModel):
             node.level = level
             for i, sub in enumerate(node.subnodes):
                 sub.rank = i + 1
-                sub.parent = node
+                sub.level = level + 1
+                sub.parent = node  # ✅ FIX: assign parent
                 _assign(sub, level + 1)
 
         self.root_node.rank = 1
         self.root_node.level = 1
+        self.root_node.parent = None  # ✅ optional clarity
         _assign(self.root_node)
+
 
 
 
