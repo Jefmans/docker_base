@@ -89,11 +89,13 @@ def create_outline(session_id: str):
 
     # Step 3: Build full node structure from outline
     tree.root_node.subnodes = [
-        ResearchTree.node_from_outline_section(section, parent=tree.root_node, rank=i + 1, level=2)
-        for i, section in enumerate(outline.sections)
+        ResearchTree.node_from_outline_section(section)
+        for section in outline.sections
     ]
 
-    # tree.assign_rank_and_level()
+    # Step 4: Assign hierarchy metadata
+    tree.assign_rank_and_level()
+
 
 
     # ✅ NEW: attach outline metadata (optional, but nice)

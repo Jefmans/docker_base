@@ -145,44 +145,33 @@ class ResearchTree(BaseModel):
         
     @staticmethod
     def node_from_outline_section(
-        section: OutlineSection,
-        parent: Optional["ResearchNode"] = None,
-        rank: int = 1,
-        level: int = 1
+        section: OutlineSection
     ) -> ResearchNode:
         node = ResearchNode(
             title=section.heading,
             questions=section.questions,
-            parent=parent,
-            rank=rank,
-            level=level
+            subnodes=[
+                ResearchTree.node_from_outline_section(sub)
+                for sub in section.subsections or []
+            ]
         )
-
-        for i, sub in enumerate(section.subsections or []):
-            child = ResearchTree.node_from_outline_section(
-                sub,
-                parent=node,
-                rank=i + 1,
-                level=level + 1
-            )
-            node.subnodes.append(child)
-
         return node
+
 
     
     def assign_rank_and_level(self):
-        def _assign(node: ResearchNode, level: int = 1):
+        def _assign(node: ResearchNode, parent: Optional[ResearchNode], level: int):
+            node.parent = parent
             node.level = level
             for i, sub in enumerate(node.subnodes):
                 sub.rank = i + 1
-                sub.level = level + 1
-                sub.parent = node  # ✅ FIX: assign parent
-                _assign(sub, level + 1)
+                _assign(sub, node, level + 1)
 
         self.root_node.rank = 1
         self.root_node.level = 1
-        self.root_node.parent = None  # ✅ optional clarity
-        _assign(self.root_node)
+        self.root_node.parent = None
+        _assign(self.root_node, None, 1)
+
 
 
 
