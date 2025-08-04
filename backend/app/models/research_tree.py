@@ -111,6 +111,14 @@ class ResearchNode(BaseModel):
         if self.parent:
             return f"{self.parent.title}"
         return None
+    
+    @property
+    def node_id(self) -> int:
+        return id(self)
+
+    @property
+    def parent_id(self) -> Optional[int]:
+        return id(self.parent) if self.parent else None
 
 
 

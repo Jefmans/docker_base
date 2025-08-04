@@ -363,6 +363,8 @@ def export_tree_content(session_id: str):
             "parent_level":node.parent.level if node.parent else None,
             "display_rank": node.display_rank,
             "parent_title": node.parent_title,
+            "node_id": node.node_id,
+            "parent_id": node.parent_id,
             # "ranked_title": node.ranked_title, 
             "subnodes": [serialize_node(sub) for sub in node.subnodes],
         }
