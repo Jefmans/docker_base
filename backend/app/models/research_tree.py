@@ -202,7 +202,7 @@ class ResearchTree(BaseModel):
         self.root_node.rank = 1
         self.root_node.level = 1
         self.root_node.parent = None
-        _assign(self.root_node, None, 1)
+        _assign(self.root_node, None, 0)
 
 
 
