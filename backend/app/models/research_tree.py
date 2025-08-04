@@ -79,6 +79,12 @@ class ResearchNode(BaseModel):
 
     def needs_expansion(self) -> bool:
         return not self.content or self.needs_more_chunks() or not self.summary
+    
+    @property
+    def display_rank(self) -> str:
+        if not self.parent:
+            return str(self.rank or 1)
+        return f"{self.parent.display_rank}.{self.rank or 1}"
 
 ResearchNode.update_forward_refs()
 
@@ -147,14 +153,17 @@ class ResearchTree(BaseModel):
         return node
     
     def assign_rank_and_level(self):
-        def _assign(node: ResearchNode, base_rank: str = "1", base_level: int = 1):
-            node.rank = base_rank
-            node.level = base_level
+        def _assign(node: ResearchNode, level: int = 1):
+            node.level = level
             for i, sub in enumerate(node.subnodes):
-                sub_rank = f"{base_rank}.{i+1}"
-                _assign(sub, sub_rank, base_level + 1)
+                sub.rank = i + 1
+                sub.parent = node
+                _assign(sub, level + 1)
 
+        self.root_node.rank = 1
+        self.root_node.level = 1
         _assign(self.root_node)
+
 
 
     def to_markdown(self) -> str:
@@ -202,6 +211,7 @@ class ResearchTree(BaseModel):
                 "title": node.title,
                 "rank": node.rank,
                 "level": node.level,
+                "display_rank": node.display_rank,  # ✅ computed property
                 "questions": node.questions,
                 "generated_questions": node.generated_questions,
                 "chunks": [c.dict() for c in node.chunks],
