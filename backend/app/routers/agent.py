@@ -350,6 +350,7 @@ def export_tree_content(session_id: str):
             "conclusion": node.conclusion,
             "rank": node.rank,
             "level": node.level,
+            "parent":node.parent,
             "display_rank": node.display_rank,
             # "ranked_title": node.ranked_title, 
             "subnodes": [serialize_node(sub) for sub in node.subnodes],
