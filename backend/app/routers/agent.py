@@ -96,12 +96,13 @@ def create_outline(session_id: str):
     # Step 4: Assign hierarchy metadata
     tree.assign_rank_and_level()
 
-    print(tree.query)
-    print(tree.root_node.title)
-
+    
 
     for node in tree.root_node.walk():
         print(f"{node.title} → parent: {node.parent.title if node.parent else 'None'}")
+        print(f"             → parent rank: {node.parent.rank if node.parent else 'None'}")
+        print(f"             → parent level: {node.parent.level if node.parent else 'None'}")
+        print("")
 
 
 
