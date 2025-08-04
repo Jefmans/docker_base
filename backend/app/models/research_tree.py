@@ -200,6 +200,8 @@ class ResearchTree(BaseModel):
         def clean_node(node):
             return {
                 "title": node.title,
+                "rank": node.rank,
+                "level": node.level,
                 "questions": node.questions,
                 "generated_questions": node.generated_questions,
                 "chunks": [c.dict() for c in node.chunks],
