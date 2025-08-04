@@ -230,9 +230,10 @@ class ResearchTree(BaseModel):
         def clean_node(node):
             return {
                 "title": node.title,
-                "parent" : node.parent,
                 "rank": node.rank,
                 "level": node.level,
+                "parent_rank":node.parent.rank,
+                "parent_level":node.parent.level,
                 "display_rank": node.display_rank, # ✅ computed property
                 # "ranked_title": node.ranked_title,  # ✅ computed property
                 "questions": node.questions,
