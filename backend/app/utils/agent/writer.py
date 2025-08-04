@@ -22,29 +22,19 @@ def get_context_for_questions(questions: List[str], top_k: int = 5) -> str:
     unique_texts = list({doc.page_content for doc in chunks})
     return "\n\n".join(unique_texts[:20])  # limit
 
-def write_section(section: dict) -> str:
-    heading = section["heading"]
-    goals = section["goals"]
-    questions = section["questions"]
 
-    context = get_context_for_questions(questions)
-    if not context.strip():
-        return f"(No relevant context found for section: {heading})"
-
+def write_section(node: ResearchNode) -> ResearchNode:
     prompt = f"""
-            You are a scientific writer. Write a detailed section titled "{heading}" with the following goals:
+    Write a detailed section titled "{node.title}" based on the following questions:
+    {node.questions}
 
-            {goals}
+    Only include text, no headings.
+    """
+    llm_output = llm.invoke(prompt).content.strip()
+    node.content = llm_output
+    node.mark_final()
+    return node
 
-            Use only the CONTEXT below, which comes from academic PDFs. Do not add external knowledge.
-
-            CONTEXT:
-            {context}
-
-            Write a clear and informative section (300–800 words) based on the questions:
-            {questions}
-            """
-    return llm.invoke(prompt).content.strip()
 
 
 def write_summary(node: ResearchNode) -> str:

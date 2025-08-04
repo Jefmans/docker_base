@@ -125,19 +125,9 @@ def write_section_by_id(session_id: str, section_id: int):
 
     node = tree.root_node.subnodes[section_id]
 
-    # Step 3: Prepare section dictionary for writing
-    section_data = {
-        "heading": node.title,
-        "goals": "",  # You can optionally extract or store `goals` in the node
-        "questions": node.questions or [],
-    }
 
     # Step 4: Generate content
-    generated_text = write_section(section_data)
-
-    # Step 5: Save content into the node
-    node.content = generated_text
-    node.mark_final()
+    write_section(node)
 
     # Step 6: Save updated tree back to DB
     save_research_tree_db(session_id, tree)
@@ -146,7 +136,7 @@ def write_section_by_id(session_id: str, section_id: int):
         "session_id": session_id,
         "section_id": section_id,
         "heading": node.title,
-        "text": generated_text
+        "text": node.content
     }
 
 @router.post("/agent/expand/{section_id}")
@@ -292,17 +282,11 @@ def full_run(request: AgentQueryRequest):
         # STEP 6: Write content per section
         section_outputs = []
         for i, node in enumerate(tree.root_node.subnodes):
-            section_data = {
-                "heading": node.title,
-                "goals": "",  # if you want to use `goals`, add it to ResearchNode
-                "questions": node.questions
-            }
-            text = write_section(section_data)
-            node.content = text
-            node.mark_final()
+            write_section(node)
+            
             section_outputs.append({
                 "heading": node.title,
-                "text": text
+                "text": node.content
             })
 
         # STEP 7: Save full tree to DB

@@ -64,15 +64,10 @@ def process_node_recursively(node: ResearchNode, tree: ResearchTree, top_k: int 
         deepen_node_with_subquestions(node, tree, top_k=top_k)
 
     # 3. Write section content
-    section_data = {
-        "heading": node.title,
-        "goals": "",
-        "questions": node.questions or [],
-    }
-    node.content = write_section(section_data)
+    write_section(node)
     node.summary = write_summary(node)
     node.conclusion = write_conclusion(node)
-    node.mark_final()
+    
 
     # 4. Recurse through subnodes
     for subnode in node.subnodes:

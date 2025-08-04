@@ -27,16 +27,23 @@ class ResearchNode(BaseModel):
     parent: Optional["ResearchNode"] = None
     subnodes: List["ResearchNode"] = []
 
+    rank: Optional[int] = None  # Format: '1.1', '2.1.1', etc.
+    level: Optional[int] = None  # Format: '1.1', '2.1.1', etc.
+
+
     @staticmethod
-    def from_outline_section(section: OutlineSection) -> "ResearchNode":
-        return ResearchNode(
+    def from_outline_section(section: OutlineSection, parent_rank: str = "") -> "ResearchNode":
+        # Generate the new rank based on the parent rank and current level
+        rank = f"{parent_rank}.{len(section.subsections) + 1}" if parent_rank else "1"
+
+        node = ResearchNode(
             title=section.heading,
             questions=section.questions,
-            subnodes=[
-                ResearchNode.from_outline_section(sub)
-                for sub in section.subsections
-            ]
+            rank=rank,  # Track the rank here
+            subnodes=[ResearchNode.from_outline_section(sub, rank) for sub in section.subsections]
         )
+        return node
+
 
     class Config:
         arbitrary_types_allowed = True
@@ -85,6 +92,12 @@ class ResearchTree(BaseModel):
 
     class Config:
         arbitrary_types_allowed = True
+
+    def add_subnode(self, parent_title: str, subnode_data: dict):
+        parent_node = self.root_node.find_node_by_title(parent_title)
+        if parent_node:
+            subnode = ResearchNode(**subnode_data)
+            parent_node.add_subnode(subnode)
 
     def deduplicate_all(self):
         self._deduplicate_chunks()
@@ -228,9 +241,7 @@ class ResearchTree(BaseModel):
             return "\n".join(parts)
 
         body = walk(self.root_node)
-
-        return f"\"\"\n\\documentclass{{article}}\n\\usepackage[utf8]{{inputenc}}\n\\usepackage{{hyperref}}\n\\title{{{escape_latex(self.query)}}}\n\\begin{{document}}\n\\maketitle\n\n{body}\n\n\\end{{document}}\n\"\""
-
+        return f"\\documentclass{{article}}\n\\usepackage[utf8]{{inputenc}}\n\\title{{{escape_latex(self.query)}}}\n\\begin{{document}}\n\\maketitle\n\n{body}\n\n\\end{{document}}"
 
     def to_latex_styled(self) -> str:
         import re

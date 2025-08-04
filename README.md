@@ -45,6 +45,8 @@ TO DO
 
 8) storing in Elastic => we're using different methods in different places for "pdf_chunks" - "captions" => streamline
 
+9) USE CLIP to generate text based on image
+
 
 
 
