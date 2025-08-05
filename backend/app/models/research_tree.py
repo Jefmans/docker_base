@@ -72,6 +72,57 @@ class ResearchNode(BaseModel):
     def mark_final(self):
         self.is_final = True
 
+
+    @staticmethod
+    def from_outline_section(section: OutlineSection, parent_rank: str = "") -> "ResearchNode":
+        # Generate the new rank based on the parent rank and current level
+        rank = f"{parent_rank}.{len(section.subsections) + 1}" if parent_rank else "1"
+
+        node = ResearchNode(
+            title=section.heading,
+            questions=section.questions,
+            rank=rank,  # Track the rank here
+            subnodes=[ResearchNode.from_outline_section(sub, rank) for sub in section.subsections]
+        )
+        return node
+
+
+    class Config:
+        arbitrary_types_allowed = True
+        # underscore_attrs_are_private = True
+        json_encoders = {
+            "ResearchNode": lambda v: v.dict(exclude_none=True)
+        }
+
+    def add_subnode(self, node: "ResearchNode"):
+        node.parent = self
+        self.subnodes.append(node)
+
+    def all_chunks(self) -> List[Chunk]:
+        return self.chunks + [c for sn in self.subnodes for c in sn.all_chunks()]
+
+    def all_questions(self) -> List[str]:
+        return self.questions + [q for sn in self.subnodes for q in sn.all_questions()]
+
+    def find_node_by_title(self, title: str) -> Optional["ResearchNode"]:
+        if self.title == title:
+            return self
+        for sn in self.subnodes:
+            result = sn.find_node_by_title(title)
+            if result:
+                return result
+        return None
+
+    def mark_final(self):
+        self.is_final = True
+
+    def needs_more_chunks(self, threshold: int = 3) -> bool:
+        return len(self.chunks) < threshold
+
+    def needs_expansion(self) -> bool:
+        return not self.content or self.needs_more_chunks() or not self.summary
+        
+
 ResearchNode.update_forward_refs()
 
 class ResearchTree(BaseModel):
