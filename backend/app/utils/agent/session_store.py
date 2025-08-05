@@ -1,7 +1,7 @@
 # backend/app/utils/agent/session_store.py
 
 from sqlalchemy.orm import Session as DBSession
-from backend.app.db.db import Session as SessionModel
+from app.db.db import Session as SessionModel
 from app.models.research_tree import ResearchTree
 import uuid
 

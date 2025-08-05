@@ -2,7 +2,7 @@
 
 from typing import List, Dict
 from app.models.research_tree import ResearchTree
-from backend.app.db.db import Session as SessionModel, SessionLocal
+from app.db.db import Session as SessionModel, SessionLocal
 from sqlalchemy.orm import Session as DBSession
 import uuid
 import json
