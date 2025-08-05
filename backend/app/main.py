@@ -1,6 +1,7 @@
 from fastapi import FastAPI
 from app.routers import health, upload, extract, process, query, query_agent, agent
-from app.db.db import Base, engine  # Ensure engine is correctly configured
+from app.db.db import engine
+from app.db.base import Base  # Ensure engine is correctly configured
 from app.db.models import research_node_orm  # force table registration
 
 # Auto-create tables
