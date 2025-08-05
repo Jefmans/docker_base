@@ -26,8 +26,8 @@ class ResearchNode(BaseModel):
     parent: Optional["ResearchNode"] = None
     subnodes: List["ResearchNode"] = []
 
-    rank: Optional[int] = None
-    level: Optional[int] = None
+    rank: Optional[int] = 0
+    level: Optional[int] = 0
 
     def __str__(self):
         return f"{self.title} : rank {self.rank} - level {self.level}"
