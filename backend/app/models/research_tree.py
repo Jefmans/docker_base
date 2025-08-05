@@ -15,7 +15,7 @@ class Chunk(BaseModel):
     embedding: Optional[List[float]] = None
 
 class ResearchNode(BaseModel):
-    id: str = Field(default_factory=lambda: str(uuid4()))
+    id: UUID = Field(default_factory=uuid4)  # ✅ Use UUID directly
     title: str
     questions: List[str] = []
     generated_questions: List[str] = []
@@ -112,10 +112,7 @@ class ResearchNode(BaseModel):
 
     class Config:
         arbitrary_types_allowed = True
-        # underscore_attrs_are_private = True
-        json_encoders = {
-            "ResearchNode": lambda v: v.dict(exclude_none=True)
-        }
+
 
     def add_subnode(self, node: "ResearchNode"):
         node.parent = self
@@ -208,14 +205,15 @@ class ResearchTree(BaseModel):
         node_map = {}
         for orm_node in all_orm_nodes:
             node = ResearchNode.from_orm_model(orm_node)
-            node_map[str(node.id)] = node
+            node_map[node.id] = node
+
 
         # Link children to parents
         for orm_node in all_orm_nodes:
             if orm_node.parent_id:
-                parent = node_map[str(orm_node.parent_id)]
+                parent = node_map[orm_node.parent_id]
                 parent.subnodes.append(node_map[str(orm_node.id)])
 
-        root_node = node_map[str(root_orm.id)]
+        root_node = node_map[root_orm.id]
         return cls(query=root_node.title, root_node=root_node)
 
