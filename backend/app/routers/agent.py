@@ -1,4 +1,4 @@
-from fastapi import APIRouter, Request, HTTPException, BackgroundTasks
+from fastapi import APIRouter, Request, HTTPException, BackgroundTasks, Depends
 from uuid import uuid4
 from pydantic import BaseModel
 from app.utils.agent.search_chunks import search_chunks
@@ -19,6 +19,7 @@ from fastapi.encoders import jsonable_encoder
 from app.utils.agent.controller import should_deepen_node
 from app.utils.agent.expander import enrich_node_with_chunks_and_subquestions, deepen_node_with_subquestions, process_node_recursively, export_tree_to_pdf
 from app.db import SessionLocal
+
 
 
 
