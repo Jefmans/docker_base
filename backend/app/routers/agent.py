@@ -57,7 +57,9 @@ async def start_query_session(request: AgentQueryRequest):
 
 @router.post("/agent/subquestions")
 def generate_subquestions(session_id: str):
-    tree = get_research_tree_db(session_id)
+    # tree = get_research_tree_db(session_id)
+    db = SessionLocal()
+    tree = ResearchTree.load_from_db(db, session_id)
     if not tree:
         raise HTTPException(status_code=404, detail="ResearchTree not found")
 
