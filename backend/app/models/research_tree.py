@@ -2,6 +2,10 @@ from typing import List, Optional, Dict, Set
 from pydantic import BaseModel, Field
 from app.utils.agent.outline import OutlineSection
 from uuid import uuid4
+from uuid import UUID
+from sqlalchemy.orm import Session
+from app.models.research_node_orm import ResearchNodeORM  # adjust path if needed
+from app.models.research_tree import ResearchTree, ResearchNode  # adjust path if needed
 
 class Chunk(BaseModel):
     id: str
@@ -153,37 +157,46 @@ class ResearchTree(BaseModel):
         _save_node(self.root_node)
         db.commit()
 
-    @staticmethod
-    def load_from_db(db, session_id: str) -> "ResearchTree":
-        from app.db.models.research_node_orm import ResearchNodeORM
-        all_nodes = db.query(ResearchNodeORM).filter_by(session_id=session_id).all()
-        node_map = {str(node.id): node for node in all_nodes}
 
-        for node in all_nodes:
-            if node.parent_id:
-                parent = node_map[str(node.parent_id)]
-                parent.children.append(node)
+    @classmethod
+    def load_from_db(cls, db: Session, session_id: str) -> "ResearchTree":
+        try:
+            session_uuid = UUID(session_id)
+        except ValueError:
+            raise ValueError("Invalid session_id format; must be a valid UUID")
 
-        root_orm = next((n for n in all_nodes if n.parent_id is None), None)
+        # Explicitly cast session_id and parent_id=None to ensure filtering works
+        root_orm = (
+            db.query(ResearchNodeORM)
+            .filter(
+                ResearchNodeORM.session_id == session_uuid,
+                ResearchNodeORM.parent_id == None  # noqa: E711
+            )
+            .first()
+        )
+
         if not root_orm:
             raise ValueError("No root node found")
 
-        def _to_research_node(orm_node):
-            node = ResearchNode(
-                id=str(orm_node.id),
-                title=orm_node.title,
-                content=orm_node.content,
-                summary=orm_node.summary,
-                conclusion=orm_node.conclusion,
-                rank=orm_node.rank,
-                level=orm_node.level,
-                is_final=orm_node.is_final,
-                subnodes=[]
-            )
-            node.subnodes = [_to_research_node(child) for child in orm_node.children]
-            for child in node.subnodes:
-                child.parent = node
-            return node
+        # Load all nodes for the session
+        all_orm_nodes = (
+            db.query(ResearchNodeORM)
+            .filter(ResearchNodeORM.session_id == session_uuid)
+            .all()
+        )
 
-        root_node = _to_research_node(root_orm)
-        return ResearchTree(root_node=root_node, query="")
+        # Build id → node map
+        node_map = {}
+        for orm_node in all_orm_nodes:
+            node = ResearchNode.from_orm_model(orm_node)
+            node_map[str(node.id)] = node
+
+        # Link children to parents
+        for orm_node in all_orm_nodes:
+            if orm_node.parent_id:
+                parent = node_map[str(orm_node.parent_id)]
+                parent.subnodes.append(node_map[str(orm_node.id)])
+
+        root_node = node_map[str(root_orm.id)]
+        return cls(query=root_node.title, root_node=root_node)
+
