@@ -77,6 +77,25 @@ class ResearchNode(BaseModel):
         self.is_final = True
 
 
+    @classmethod
+    def from_orm_model(cls, orm_node: ResearchNodeORM) -> "ResearchNode":
+        return cls(
+            id=orm_node.id,
+            title=orm_node.title,
+            content=orm_node.content,
+            summary=orm_node.summary,
+            conclusion=orm_node.conclusion,
+            rank=orm_node.rank,
+            level=orm_node.level,
+            is_final=orm_node.is_final,
+            questions=[],
+            generated_questions=[],
+            chunks=[],
+            chunk_ids=set(),
+            subnodes=[]
+        )
+
+
     @staticmethod
     def from_outline_section(section: OutlineSection, parent_rank: str = "") -> "ResearchNode":
         # Generate the new rank based on the parent rank and current level
