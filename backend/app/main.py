@@ -1,6 +1,6 @@
 from fastapi import FastAPI
 from app.routers import health, upload, extract, process, query, query_agent, agent
-from app.db import Base, engine  # Ensure engine is correctly configured
+from backend.app.db.db import Base, engine  # Ensure engine is correctly configured
 
 # Auto-create tables
 Base.metadata.create_all(bind=engine)

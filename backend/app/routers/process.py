@@ -2,9 +2,9 @@ from fastapi import APIRouter, HTTPException, Depends
 import requests
 import uuid
 from sqlalchemy.orm import Session
-from app.db import SessionLocal, get_db
+from backend.app.db.db import SessionLocal, get_db
 from app.utils.save_images import save_image_metadata_list
-from app.db import Document, ImageRecord
+from backend.app.db.db import Document, ImageRecord
 from pydantic import BaseModel
 from typing import List, Optional
 from app.schemas import ImageMetadata  # ✅ This uses the new schema

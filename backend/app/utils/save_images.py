@@ -1,4 +1,4 @@
-from app.db import ImageRecord
+from backend.app.db.db import ImageRecord
 from app.schemas import ImageMetadata
 
 def save_image_metadata_list(db, metadata_list: list[ImageMetadata]):
