@@ -18,7 +18,7 @@ from fastapi.responses import JSONResponse, Response
 from fastapi.encoders import jsonable_encoder
 from app.utils.agent.controller import should_deepen_node
 from app.utils.agent.expander import enrich_node_with_chunks_and_subquestions, deepen_node_with_subquestions, process_node_recursively, export_tree_to_pdf
-from app.db import SessionLocal
+from app.db import SessionLocal, get_db
 
 
 
