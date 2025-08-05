@@ -10,8 +10,8 @@ class ResearchNodeORM(Base):
     id = Column(UUID(as_uuid=True), primary_key=True, default=uuid4)
     session_id = Column(UUID(as_uuid=True), index=True, nullable=False)
 
-    parent_id = Column(UUID(as_uuid=True), ForeignKey("research_nodes.id"), nullable=True)
-    children = relationship("ResearchNodeORM", backref="parent", cascade="all, delete")
+    # parent_id = Column(UUID(as_uuid=True), ForeignKey("research_nodes.id"), nullable=True)
+    # children = relationship("ResearchNodeORM", backref="parent", cascade="all, delete")
 
     title = Column(String, nullable=False)
     content = Column(Text, nullable=True)
@@ -20,4 +20,21 @@ class ResearchNodeORM(Base):
 
     rank = Column(Integer, nullable=False)
     level = Column(Integer, nullable=False)
+
     is_final = Column(Boolean, default=False)
+
+    
+    parent_id = Column(Integer, ForeignKey("research_nodes.id"), nullable=True)
+
+    # ✅ Self-referential relationship (fix here)
+    parent = relationship(
+        "ResearchNodeORM",
+        remote_side="ResearchNodeORM.id",  # <- this is required!
+        back_populates="children",
+    )
+
+    children = relationship(
+        "ResearchNodeORM",
+        back_populates="parent",
+        cascade="all, delete-orphan",
+    )
