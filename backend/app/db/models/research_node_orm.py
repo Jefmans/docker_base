@@ -24,7 +24,7 @@ class ResearchNodeORM(Base):
     is_final = Column(Boolean, default=False)
 
     
-    parent_id = Column(Integer, ForeignKey("research_nodes.id"), nullable=True)
+    parent_id = Column(UUID(as_uuid=True), ForeignKey("research_nodes.id"))
 
     # ✅ Self-referential relationship (fix here)
     parent = relationship(
