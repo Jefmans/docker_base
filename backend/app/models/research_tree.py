@@ -161,7 +161,7 @@ class ResearchTree(BaseModel):
     @classmethod
     def load_from_db(cls, db: Session, session_id: str) -> "ResearchTree":
         try:
-            session_uuid = UUID(session_id)
+            session_uuid = session_id
         except ValueError:
             raise ValueError("Invalid session_id format; must be a valid UUID")
 
