@@ -4,7 +4,7 @@ from app.utils.agent.outline import OutlineSection
 from uuid import uuid4
 from uuid import UUID
 from sqlalchemy.orm import Session
-from app.models.research_node_orm import ResearchNodeORM  # adjust path if needed
+from app.db.models.research_node_orm import ResearchNodeORM  # adjust path if needed
 from app.models.research_tree import ResearchTree, ResearchNode  # adjust path if needed
 
 class Chunk(BaseModel):
