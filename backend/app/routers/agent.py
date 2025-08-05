@@ -18,6 +18,7 @@ from fastapi.responses import JSONResponse, Response
 from fastapi.encoders import jsonable_encoder
 from app.utils.agent.controller import should_deepen_node
 from app.utils.agent.expander import enrich_node_with_chunks_and_subquestions, deepen_node_with_subquestions, process_node_recursively, export_tree_to_pdf
+from app.db import SessionLocal
 
 
 
@@ -35,29 +36,22 @@ async def start_query_session(request: AgentQueryRequest):
     if not user_query:
         raise HTTPException(status_code=400, detail="Missing 'query' in request body.")
 
-    try:
-        top_chunks = search_chunks(user_query, top_k=request.top_k)
+    top_chunks = search_chunks(user_query, top_k=request.top_k)
+    chunk_objs = [Chunk(id=str(i), text=c, page=None, source=None) for i, c in enumerate(top_chunks)]
+    root_node = ResearchNode(title=user_query, chunks=chunk_objs)
+    tree = ResearchTree(query=user_query, root_node=root_node)
 
-        # Convert chunks (currently strings) to Chunk objects — improve later
-        chunk_objs = [Chunk(id=str(i), text=c, page=None, source=None) for i, c in enumerate(top_chunks)]
+    session_id = str(uuid4())
+    db = SessionLocal()
+    tree.save_to_db(db, session_id)
+    db.close()
 
-        root_node = ResearchNode(title=user_query, chunks=chunk_objs)
-        tree = ResearchTree(query=user_query, root_node=root_node)
-
-        session_id = str(uuid4())
-        save_research_tree_db(session_id, tree)
-
-        return {
-            "status": "success",
-            "session_id": session_id,
-            "query": user_query,
-            "preview_chunks": top_chunks[:3]
-        }
-
-    except Exception as e:
-        raise HTTPException(status_code=500, detail=str(e))
-
-
+    return {
+        "status": "success",
+        "session_id": session_id,
+        "query": user_query,
+        "preview_chunks": top_chunks[:3]
+    }
 
 @router.post("/agent/subquestions")
 def generate_subquestions(session_id: str):
@@ -77,52 +71,28 @@ def generate_subquestions(session_id: str):
 
 @router.post("/agent/outline")
 def create_outline(session_id: str):
-    tree = get_research_tree_db(session_id)
-    if not tree:
-        raise HTTPException(status_code=404, detail="ResearchTree not found")
+    db = SessionLocal()
+    tree = ResearchTree.load_from_db(db, session_id)
 
-    # Step 1: Get all chunks
-    chunks = [c.text for c in tree.root_node.all_chunks()]
-
-    # Step 2: Generate outline from LLM
+    chunks = [c.text for c in tree.root_node.walk()[0].chunks]
     outline = generate_outline(chunks, tree.query)
 
-    # Step 3: Build full node structure from outline
     tree.root_node.subnodes = [
         ResearchTree.node_from_outline_section(section)
         for section in outline.sections
     ]
-
-    # Step 4: Assign hierarchy metadata
     tree.assign_rank_and_level()
 
-    
-
-    for node in tree.root_node.walk():
-        print(f"{node.title} → parent: {node.parent.title if node.parent else 'None'}")
-        print(f"             → parent rank: {node.parent.rank if node.parent else 'None'}")
-        print(f"             → parent level: {node.parent.level if node.parent else 'None'}")
-        print("")
-
-
-
-
-    # ✅ NEW: attach outline metadata (optional, but nice)
     tree.root_node.title = outline.title or tree.root_node.title
     tree.root_node.questions = [q for sec in outline.sections for q in sec.questions]
 
-    # ✅ NEW: Save outline inside the session (DB version)
-    session = get_session_chunks_db(session_id)
-    session["outline"] = outline.dict()
-
-    # Save back to database
-    save_research_tree_db(session_id, tree)
+    tree.save_to_db(db, session_id)
+    db.close()
 
     return {
         "session_id": session_id,
         "outline": outline.dict(),
-        "node_count": len(tree.root_node.subnodes),
-        # "tree": tree.model_dump()
+        "node_count": len(tree.root_node.subnodes)
     }
 
 
@@ -130,7 +100,9 @@ def create_outline(session_id: str):
 @router.post("/agent/section/{section_id}")
 def write_section_by_id(session_id: str, section_id: int):
     # Step 1: Load full ResearchTree from DB
-    tree = get_research_tree_db(session_id)
+    # tree = get_research_tree_db(session_id)
+    db = SessionLocal()
+    tree = ResearchTree.load_from_db(db, session_id)
     if not tree:
         raise HTTPException(status_code=404, detail="ResearchTree not found")
 
@@ -156,7 +128,9 @@ def write_section_by_id(session_id: str, section_id: int):
 
 @router.post("/agent/expand/{section_id}")
 def expand_section(session_id: str, section_id: int, top_k: int = 5):
-    tree = get_research_tree_db(session_id)
+    # tree = get_research_tree_db(session_id)
+    db = SessionLocal()
+    tree = ResearchTree.load_from_db(db, session_id)
     if not tree:
         raise HTTPException(status_code=404, detail="ResearchTree not found")
 
@@ -179,7 +153,9 @@ def expand_section(session_id: str, section_id: int, top_k: int = 5):
 
 @router.post("/agent/deepen/{section_id}")
 def deepen_section(session_id: str, section_id: int, top_k: int = 5):
-    tree = get_research_tree_db(session_id)
+    # tree = get_research_tree_db(session_id)
+    db = SessionLocal()
+    tree = ResearchTree.load_from_db(db, session_id)
     if not tree:
         raise HTTPException(status_code=404, detail="ResearchTree not found")
 
@@ -213,7 +189,9 @@ def deepen_section(session_id: str, section_id: int, top_k: int = 5):
 
 @router.post("/agent/section/complete/{section_id}")
 def complete_section(session_id: str, section_id: int):
-    tree = get_research_tree_db(session_id)
+    # tree = get_research_tree_db(session_id)
+    db = SessionLocal()
+    tree = ResearchTree.load_from_db(db, session_id)
     if not tree:
         raise HTTPException(status_code=404, detail="ResearchTree not found")
 
@@ -236,7 +214,9 @@ def complete_section(session_id: str, section_id: int):
 
 @router.post("/agent/complete_tree")
 def complete_full_tree(session_id: str, top_k: int = 10):
-    tree = get_research_tree_db(session_id)
+    # tree = get_research_tree_db(session_id)
+    db = SessionLocal()
+    tree = ResearchTree.load_from_db(db, session_id)
     if not tree:
         raise HTTPException(status_code=404, detail="ResearchTree not found")
 
@@ -255,7 +235,9 @@ def complete_full_tree(session_id: str, top_k: int = 10):
 
 @router.post("/agent/article/finalize")
 def finalize_article_route(session_id: str):
-    tree = get_research_tree_db(session_id)
+    # tree = get_research_tree_db(session_id)
+    db = SessionLocal()
+    tree = ResearchTree.load_from_db(db, session_id)    
     if not tree:
         raise HTTPException(status_code=404, detail="ResearchTree not found")
 
@@ -327,7 +309,9 @@ def full_run(request: AgentQueryRequest):
 
 @router.get("/agent/tree/{session_id}")
 def get_tree(session_id: str):
-    tree = get_research_tree_db(session_id)
+    # tree = get_research_tree_db(session_id)
+    db = SessionLocal()
+    tree = ResearchTree.load_from_db(db, session_id)
     if not tree:
         raise HTTPException(status_code=404, detail="Session or tree not found")
 
@@ -338,7 +322,9 @@ def get_tree(session_id: str):
 
 @router.get("/agent/export/pdf_latex")
 def export_pdf_via_latex(session_id: str):
-    tree = get_research_tree_db(session_id)
+    # tree = get_research_tree_db(session_id)
+    db = SessionLocal()
+    tree = ResearchTree.load_from_db(db, session_id)    
     if not tree:
         raise HTTPException(status_code=404, detail="Session not found")
 
@@ -351,9 +337,12 @@ def export_pdf_via_latex(session_id: str):
 
 @router.get("/agent/export/tree_content")
 def export_tree_content(session_id: str):
-    tree = get_research_tree_db(session_id)
-    if not tree:
-        raise HTTPException(status_code=404, detail="Session not found")
+    try:
+        db = SessionLocal()
+        tree = ResearchTree.load_from_db(db, session_id)
+        db.close()
+    except ValueError:
+        raise HTTPException(status_code=404, detail="Tree not found in DB")
 
     def serialize_node(node):
         return {
@@ -377,3 +366,19 @@ def export_tree_content(session_id: str):
         "query": tree.query,
         "root_node": serialize_node(tree.root_node)
     }
+
+
+@router.post("/agent/save_tree")
+def save_tree(session_id: str, db: Session = Depends(get_db)):
+    # tree = get_research_tree_db(session_id)
+    db = SessionLocal()
+    tree = ResearchTree.load_from_db(db, session_id)    
+    tree.save_to_db(db, session_id)
+    return {"status": "saved"}
+
+@router.get("/agent/tree/{session_id}")
+def get_tree(session_id: str):
+    db = SessionLocal()
+    tree = ResearchTree.load_from_db(db, session_id)
+    db.close()
+    return JSONResponse(content=tree.model_dump_jsonable())
