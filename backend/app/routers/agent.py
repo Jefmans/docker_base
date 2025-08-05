@@ -19,6 +19,7 @@ from fastapi.encoders import jsonable_encoder
 from app.utils.agent.controller import should_deepen_node
 from app.utils.agent.expander import enrich_node_with_chunks_and_subquestions, deepen_node_with_subquestions, process_node_recursively, export_tree_to_pdf
 from app.db import SessionLocal, get_db
+from sqlalchemy.orm import Session
 
 
 
@@ -369,17 +370,3 @@ def export_tree_content(session_id: str):
     }
 
 
-@router.post("/agent/save_tree")
-def save_tree(session_id: str, db: Session = Depends(get_db)):
-    # tree = get_research_tree_db(session_id)
-    db = SessionLocal()
-    tree = ResearchTree.load_from_db(db, session_id)    
-    tree.save_to_db(db, session_id)
-    return {"status": "saved"}
-
-@router.get("/agent/tree/{session_id}")
-def get_tree(session_id: str):
-    db = SessionLocal()
-    tree = ResearchTree.load_from_db(db, session_id)
-    db.close()
-    return JSONResponse(content=tree.model_dump_jsonable())
