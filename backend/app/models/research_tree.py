@@ -403,25 +403,46 @@ class ResearchTree(BaseModel):
 
     def save_to_db(self, db, session_id: str):
         from app.db.models.research_node_orm import ResearchNodeORM
-        def _save_node(node, parent_id=None):
-            db_node = ResearchNodeORM(
-                id=node.id,
-                session_id=session_id,
-                parent_id=parent_id,
-                title=node.title,
-                content=node.content,
-                summary=node.summary,
-                conclusion=node.conclusion,
-                rank=node.rank,
-                level=node.level,
-                is_final=node.is_final,
-            )
-            db.add(db_node)
+
+        def _save_or_update_node(node: ResearchNode, parent_id=None):
+            # Check if the node exists
+            db_node = db.query(ResearchNodeORM).filter_by(id=node.id).first()
+
+            if db_node:
+                # ✅ Update existing fields
+                db_node.title = node.title
+                db_node.content = node.content
+                db_node.summary = node.summary
+                db_node.conclusion = node.conclusion
+                db_node.rank = node.rank
+                db_node.level = node.level
+                db_node.is_final = node.is_final
+                db_node.parent_id = parent_id
+            else:
+                # ✅ Create new node
+                db_node = ResearchNodeORM(
+                    id=node.id,
+                    session_id=session_id,
+                    parent_id=parent_id,
+                    title=node.title,
+                    content=node.content,
+                    summary=node.summary,
+                    conclusion=node.conclusion,
+                    rank=node.rank,
+                    level=node.level,
+                    is_final=node.is_final,
+                )
+                db.add(db_node)
+
             db.flush()
+
+            # Recurse into subnodes
             for child in node.subnodes:
-                _save_node(child, parent_id=db_node.id)
-        _save_node(self.root_node)
+                _save_or_update_node(child, parent_id=db_node.id)
+
+        _save_or_update_node(self.root_node)
         db.commit()
+
 
 
     @classmethod
