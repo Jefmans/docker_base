@@ -57,20 +57,32 @@ async def start_query_session(request: AgentQueryRequest):
 
 @router.post("/agent/subquestions")
 def generate_subquestions(session_id: str):
-    # tree = get_research_tree_db(session_id)
     db = SessionLocal()
     tree = ResearchTree.load_from_db(db, session_id)
     if not tree:
         raise HTTPException(status_code=404, detail="ResearchTree not found")
 
+    # 1. Extract text from all chunks
     chunks = [c.text for c in tree.root_node.all_chunks()]
+    
+    # 2. Generate subquestions
     subq = generate_subquestions_from_chunks(chunks, tree.query)
+
+    # ✅ 3. Store them in root_node
+    tree.root_node.generated_questions = subq
+    tree.used_questions.update(q.strip().lower() for q in subq)
+
+    # ✅ 4. Save back to DB
+    tree.save_to_db(db, session_id)
+    db.close()
 
     return {
         "session_id": session_id,
         "query": tree.query,
-        "subquestions": subq
+        "generated_questions": subq,
+        "total_questions": len(tree.used_questions)
     }
+
 
 
 @router.post("/agent/outline")
