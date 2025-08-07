@@ -91,7 +91,7 @@ def create_outline(session_id: str):
     tree = ResearchTree.load_from_db(db, session_id)
 
     chunks = [c.text for c in tree.root_node.walk()[0].chunks]
-    outline = generate_outline(chunks, tree.query)
+    outline = generate_outline(tree)
 
     tree.root_node.subnodes = [
         ResearchTree.node_from_outline_section(section)
