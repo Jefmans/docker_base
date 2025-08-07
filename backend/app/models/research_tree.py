@@ -482,8 +482,8 @@ class ResearchTree(BaseModel):
         # Link children to parents
         for orm_node in all_orm_nodes:
             if orm_node.parent_id:
-                parent = node_map[orm_node.parent_id]
-                parent.subnodes.append(node_map[str(orm_node.id)])
+                parent = node_map[orm_node.parent_id]  # ✅ UUID
+                parent.subnodes.append(node_map[orm_node.id])  # ✅ UUID
 
         root_node = node_map[root_orm.id]
         return cls(query=root_node.title, root_node=root_node)
