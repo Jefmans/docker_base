@@ -9,7 +9,7 @@ from app.utils.agent.session_memory_db import (
     save_research_tree_db, get_research_tree_db
 )
 from app.utils.agent.subquestions import generate_subquestions_from_chunks
-from app.utils.agent.outline import generate_outline, Outline
+from app.utils.agent.outline import generate_outline_from_tree
 from app.utils.agent.writer import write_section, write_summary, write_conclusion
 import json
 from app.utils.agent.finalizer import finalize_article_from_tree
@@ -91,7 +91,7 @@ def create_outline(session_id: str):
     tree = ResearchTree.load_from_db(db, session_id)
 
     chunks = [c.text for c in tree.root_node.walk()[0].chunks]
-    outline = generate_outline(tree)
+    outline = generate_outline_from_tree(tree)
 
     tree.root_node.subnodes = [
         ResearchTree.node_from_outline_section(section)

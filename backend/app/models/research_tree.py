@@ -1,6 +1,6 @@
 from typing import List, Optional, Dict, Set
 from pydantic import BaseModel, Field
-from app.utils.agent.outline import OutlineSection
+from app.models.outline_model import OutlineSection
 from uuid import uuid4
 from uuid import UUID
 from sqlalchemy.orm import Session

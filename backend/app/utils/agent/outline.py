@@ -1,38 +1,9 @@
-from typing import List, Dict
-from langchain_openai import ChatOpenAI
 
-from pydantic import BaseModel, Field
 from langchain.output_parsers import PydanticOutputParser
 from langchain.prompts import PromptTemplate
 from langchain_openai import ChatOpenAI
-
-
-
-from typing import List, Optional
-from pydantic import BaseModel
-
-# from app.models.research_tree import ResearchTree, ResearchNode, Chunk
-
-
-class OutlineSection(BaseModel):
-    heading: str
-    goals: Optional[str] = None
-    questions: List[str] = []
-    subsections: List["OutlineSection"] = []
-
-    class Config:
-        arbitrary_types_allowed = True
-
-OutlineSection.update_forward_refs()
-
-
-
-class Outline(BaseModel):
-    title: str
-    abstract: str
-    sections: List[OutlineSection]
-
-
+from app.models.outline_model import Outline
+from app.models.research_tree import ResearchTree 
 
 
 def generate_outline_from_tree(tree: ResearchTree) -> Outline:
