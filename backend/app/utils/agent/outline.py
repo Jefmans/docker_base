@@ -30,11 +30,11 @@ def generate_outline_from_tree(tree: ResearchTree) -> Outline:
 
             {format_instructions}
             """,
-        input_variables=["query", "formatted_subq", "all_chunks "],
+        input_variables=["query", "subquestions", "all_chunks"],
         partial_variables={"format_instructions": parser.get_format_instructions()}
     )
 
     chain = prompt | llm | parser
-    return chain.invoke({"query": query, "formatted_subq": subquestions, "all_chunks": all_chunks})
+    return chain.invoke({"query": query, "subquestions": subquestions, "all_chunks": all_chunks})
 
 
