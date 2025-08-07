@@ -20,7 +20,8 @@ from app.utils.agent.controller import should_deepen_node
 from app.utils.agent.expander import enrich_node_with_chunks_and_subquestions, deepen_node_with_subquestions, process_node_recursively, export_tree_to_pdf
 from app.db.db import SessionLocal, get_db
 from sqlalchemy.orm import Session
-
+from app.utils.agent.repo import upsert_questions, attach_questions_to_node
+from app.utils.agent.router_utils import choose_best_node_for_question
 
 
 
@@ -55,61 +56,71 @@ async def start_query_session(request: AgentQueryRequest):
         "preview_chunks": top_chunks[:3]
     }
 
+
+
 @router.post("/agent/subquestions")
 def generate_subquestions(session_id: str):
     db = SessionLocal()
-    tree = ResearchTree.load_from_db(db, session_id)
+    tree = ResearchTree.load_from_db(db, session_id)  # you can still reuse this to get the nodes (ids/titles)
     if not tree:
         raise HTTPException(status_code=404, detail="ResearchTree not found")
 
-    # 1. Extract text from all chunks
-    chunks = [c.text for c in tree.root_node.all_chunks()]
-    
-    # 2. Generate subquestions
+    chunks = [c.text for c in tree.root_node.all_chunks()]  # if still JSON-based; or fetch via ORM for the root node
     subq = generate_subquestions_from_chunks(chunks, tree.query)
 
-    # ✅ 3. Store them in root_node
-    tree.root_node.generated_questions = subq
-    tree.used_questions.update(q.strip().lower() for q in subq)
+    qids = upsert_questions(db, subq, source="root_subq")
 
-    # ✅ 4. Save back to DB
-    tree.save_to_db(db, session_id)
+    # route them to nodes (implement choose_best_node_for_question)
+    for qid, qtext in zip(qids, subq):
+        best_node = choose_best_node_for_question(db, qtext, tree)  # see below
+        attach_questions_to_node(db, best_node.id, [qid])
+
+    db.commit()
     db.close()
+    return {"session_id": session_id, "generated_questions": subq, "count": len(qids)}
 
-    return {
-        "session_id": session_id,
-        "query": tree.query,
-        "generated_questions": subq,
-        "total_questions": len(tree.used_questions)
-    }
 
 
 
 @router.post("/agent/outline")
 def create_outline(session_id: str):
     db = SessionLocal()
-    tree = ResearchTree.load_from_db(db, session_id)
+    try:
+        tree = ResearchTree.load_from_db(db, session_id)
 
-    chunks = [c.text for c in tree.root_node.walk()[0].chunks]
-    outline = generate_outline_from_tree(tree)
+        # 1) Build outline from existing chunks/questions
+        outline = generate_outline_from_tree(tree)
 
-    tree.root_node.subnodes = [
-        ResearchTree.node_from_outline_section(section)
-        for section in outline.sections
-    ]
-    tree.assign_rank_and_level()
+        # 2) Convert outline → nodes in the Pydantic tree
+        tree.root_node.subnodes = [
+            ResearchTree.node_from_outline_section(section)
+            for section in outline.sections
+        ]
+        tree.assign_rank_and_level()
 
-    tree.root_node.title = outline.title or tree.root_node.title
-    tree.root_node.questions = [q for sec in outline.sections for q in sec.questions]
+        tree.root_node.title = outline.title or tree.root_node.title
+        tree.root_node.questions = [q for sec in outline.sections for q in sec.questions]
 
-    tree.save_to_db(db, session_id)
-    db.close()
+        # 3) Persist nodes to ORM (this preserves node.id UUIDs)
+        tree.save_to_db(db, session_id)
 
-    return {
-        "session_id": session_id,
-        "outline": outline.dict(),
-        "node_count": len(tree.root_node.subnodes)
-    }
+        # 4) Attach outline questions to their corresponding nodes (one-to-one by index)
+        #    outline.sections[i]  -> tree.root_node.subnodes[i]
+        for section, node in zip(outline.sections, tree.root_node.subnodes):
+            if section.questions:
+                qids = upsert_questions(db, section.questions, source="outline")
+                attach_questions_to_node(db, node.id, qids)
+
+        db.commit()
+
+        return {
+            "session_id": session_id,
+            "outline": outline.dict(),
+            "node_count": len(tree.root_node.subnodes)
+        }
+    finally:
+        db.close()
+
 
 
 

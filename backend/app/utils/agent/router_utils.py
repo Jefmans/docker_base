@@ -1,0 +1,13 @@
+# app/utils/agent/router_utils.py
+from difflib import SequenceMatcher
+from app.models.research_tree import ResearchTree, ResearchNode
+
+def choose_best_node_for_question(_db, qtext: str, tree: ResearchTree) -> ResearchNode:
+    # naive: pick the top-level node with the most similar title
+    def best(node_list):
+        scores = [(SequenceMatcher(None, qtext.lower(), n.title.lower()).ratio(), n) for n in node_list]
+        return max(scores, key=lambda x: x[0])[1] if scores else tree.root_node
+    # prefer children if present
+    if tree.root_node.subnodes:
+        return best(tree.root_node.subnodes)
+    return tree.root_node

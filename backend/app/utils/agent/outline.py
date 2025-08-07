@@ -17,7 +17,7 @@ def generate_outline_from_tree(tree: ResearchTree) -> Outline:
 
     prompt = PromptTemplate(
         template="""
-            You are a scientific writer assistant. Create a full outline for a scientific article based on the main question and subquestions below.
+            You are a scientific writer assistant. Create a full outline for a scientific article based on the main question, subquestions and context below.
 
             MAIN QUESTION:
             {query}

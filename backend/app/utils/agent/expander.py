@@ -5,52 +5,66 @@ from app.utils.agent.controller import should_deepen_node
 from app.utils.agent.writer import write_section, write_summary, write_conclusion
 
 
+from app.utils.agent.repo import upsert_chunks, attach_chunks_to_node, upsert_questions, attach_questions_to_node
+from app.db.db import SessionLocal  # add this import
+
+
 def enrich_node_with_chunks_and_subquestions(node: ResearchNode, tree: ResearchTree, top_k: int = 10):
-    queries = [node.title] + node.questions
-    combined_query = " ".join(queries)
+    # 0) build a query
+    queries = [node.title] + getattr(node, "questions", [])
+    combined_query = " ".join(q for q in queries if q).strip() or node.title
 
     results = search_chunks(combined_query, top_k=top_k, return_docs=True)
-    all_texts = []
 
+    chunk_dicts = []
     for i, doc in enumerate(results):
-        chunk_id = doc.metadata.get("id", f"{hash(doc.page_content)}_{i}")  # Use ES ID if available
+        chunk_id = doc.metadata.get("id", f"{hash(doc.page_content)}_{i}")
+        chunk_dicts.append({
+            "id": chunk_id,
+            "text": doc.page_content,
+            "page": doc.metadata.get("page"),
+            "source": doc.metadata.get("source"),
+        })
 
-        if chunk_id not in tree.used_chunk_ids:
-            chunk = Chunk(
-                id=chunk_id,
-                text=doc.page_content,
-                page=doc.metadata.get("page"),
-                source=doc.metadata.get("source"),
-            )
-            node.chunks.append(chunk)
-            node.chunk_ids.add(chunk_id)
-            tree.used_chunk_ids.add(chunk_id)
-            all_texts.append(doc.page_content)
+    db = SessionLocal()
+    try:
+        upsert_chunks(db, chunk_dicts)
+        attach_chunks_to_node(db, node.id, [c["id"] for c in chunk_dicts])
 
-    if all_texts:
-        subqs = generate_subquestions_from_chunks(all_texts, node.title)
-        node.generated_questions = subqs
-        tree.used_questions.update(q.strip().lower() for q in subqs)
+        subqs = generate_subquestions_from_chunks([c["text"] for c in chunk_dicts], node.title)
+        qids = upsert_questions(db, subqs, source="expansion")
+        attach_questions_to_node(db, node.id, qids)
+
+        # make these visible to controller.should_deepen_node
+        node.generated_questions_texts = subqs
+        db.commit()
+    finally:
+        db.close()
 
 
 
+
+from app.db.db import SessionLocal
 
 def deepen_node_with_subquestions(node, tree, top_k=5):
-    for q in node.generated_questions:
-        results = search_chunks(q, top_k=top_k, return_docs=True)
-        for i, doc in enumerate(results):
-            chunk_id = doc.metadata.get("id", f"{hash(doc.page_content)}_{i}")
-            if chunk_id not in tree.used_chunk_ids:
-                chunk = Chunk(
-                    id=chunk_id,
-                    text=doc.page_content,
-                    page=doc.metadata.get("page"),
-                    source=doc.metadata.get("source"),
-                )
-                node.chunks.append(chunk)
-                node.chunk_ids.add(chunk_id)
-                tree.used_chunk_ids.add(chunk_id)
-
+    db = SessionLocal()
+    try:
+        for q in getattr(node, "generated_questions_texts", []):
+            results = search_chunks(q, top_k=top_k, return_docs=True)
+            chunk_dicts = []
+            for i, doc in enumerate(results):
+                chunk_id = doc.metadata.get("id", f"{hash(doc.page_content)}_{i}")
+                chunk_dicts.append({
+                    "id": chunk_id,
+                    "text": doc.page_content,
+                    "page": doc.metadata.get("page"),
+                    "source": doc.metadata.get("source"),
+                })
+            upsert_chunks(db, chunk_dicts)
+            attach_chunks_to_node(db, node.id, [c["id"] for c in chunk_dicts])
+        db.commit()
+    finally:
+        db.close()
 
 
 

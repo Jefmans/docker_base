@@ -23,19 +23,43 @@ def get_context_for_questions(questions: List[str], top_k: int = 5) -> str:
     return "\n\n".join(unique_texts[:20])  # limit
 
 
-def write_section(node: ResearchNode) -> ResearchNode:
-    if isinstance(node, dict):
-        raise TypeError("Expected a ResearchNode, got dict.")
-    prompt = f"""
-    Write a detailed section titled "{node.title}" based on the following questions:
-    {node.questions}
+# writer.py
+from app.utils.agent.repo import get_node_questions, get_node_chunks, mark_questions_consumed
+from app.db.db import SessionLocal
 
-    Only include text, no headings.
-    """
-    llm_output = llm.invoke(prompt).content.strip()
-    node.content = llm_output
-    node.mark_final()
+def write_section(node: ResearchNode):
+    db = SessionLocal()
+    try:
+        q_objs = get_node_questions(db, node.id)
+        questions = [q.text for q in q_objs]
+        chunks = get_node_chunks(db, node.id)
+        context = "\n\n".join(c.text for c in chunks[:20])
+
+        prompt = f"""
+        You are a scientific writer.
+        Write a detailed section titled "{node.title}".
+
+        QUESTIONS TO ADDRESS:
+        {chr(10).join(f"- {q}" for q in questions)}
+
+        CONTEXT (verbatim excerpts, cite indirectly):
+        {context}
+
+        Constraints:
+        - Integrate answers to the questions.
+        - Be accurate and neutral.
+        - No extra headings; just the prose.
+        """
+
+        node.content = llm.invoke(prompt).content.strip()
+        node.mark_final()
+
+        mark_questions_consumed(db, [q.id for q in q_objs])
+        db.commit()
+    finally:
+        db.close()
     return node
+
 
 
 
@@ -56,10 +80,17 @@ def write_summary(node: ResearchNode) -> str:
     return llm.invoke(prompt).content.strip()
 
 
-def write_conclusion(node: ResearchNode) -> str:
-    context = "\n\n".join(c.text for c in node.chunks[:20])
+from app.utils.agent.repo import get_node_chunks
+
+def write_summary(node: ResearchNode) -> str:
+    db = SessionLocal()
+    try:
+        chunks = get_node_chunks(db, node.id)
+        context = "\n\n".join(c.text for c in chunks[:20])
+    finally:
+        db.close()
     if not context.strip():
-        return f"(No conclusion available for: {node.title})"
+        return f"(No summary available for: {node.title})"
 
     prompt = f"""
         You are a scientific assistant.
