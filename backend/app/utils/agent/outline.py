@@ -11,7 +11,7 @@ from langchain_openai import ChatOpenAI
 from typing import List, Optional
 from pydantic import BaseModel
 
-from app.models.research_tree import ResearchTree, ResearchNode, Chunk
+# from app.models.research_tree import ResearchTree, ResearchNode, Chunk
 
 
 class OutlineSection(BaseModel):
@@ -59,7 +59,7 @@ def generate_outline_from_tree(tree: ResearchTree) -> Outline:
 
             {format_instructions}
             """,
-        input_variables=["query", "formatted_subq", "all_chunks"],
+        input_variables=["query", "formatted_subq", "all_chunks "],
         partial_variables={"format_instructions": parser.get_format_instructions()}
     )
 
