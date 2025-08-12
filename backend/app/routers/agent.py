@@ -96,6 +96,12 @@ def create_outline(session_id: str):
         #     We'll switch to ORM-sourced context later if needed.)
         outline = generate_outline_from_tree(tree)
 
+        # after `outline = generate_outline_from_tree(tree)`
+        for i, sec in enumerate(outline.sections):
+            if not sec.questions:
+                raise HTTPException(status_code=500, detail=f"Outline section {i} has no questions")
+
+
         # 3) Build Pydantic child nodes from the outline
         tree.root_node.subnodes = [
             ResearchTree.node_from_outline_section(section)

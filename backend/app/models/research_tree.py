@@ -5,6 +5,12 @@ from uuid import uuid4
 from uuid import UUID
 from sqlalchemy.orm import Session
 from app.db.models.research_node_orm import ResearchNodeORM  # adjust path if needed
+# add imports at the top of the file
+from app.db.models.node_question_orm import NodeQuestionORM
+from app.db.models.question_orm import QuestionORM
+from app.db.models.node_chunk_orm import NodeChunkORM
+from app.db.models.chunk_orm import ChunkORM
+
 
 
 class Chunk(BaseModel):
@@ -452,20 +458,15 @@ class ResearchTree(BaseModel):
         except ValueError:
             raise ValueError("Invalid session_id format; must be a valid UUID")
 
-        # Explicitly cast session_id and parent_id=None to ensure filtering works
         root_orm = (
             db.query(ResearchNodeORM)
-            .filter(
-                ResearchNodeORM.session_id == session_uuid,
-                ResearchNodeORM.parent_id == None  # noqa: E711
-            )
+            .filter(ResearchNodeORM.session_id == session_uuid,
+                    ResearchNodeORM.parent_id == None)  # noqa: E711
             .first()
         )
-
         if not root_orm:
             raise ValueError("No root node found")
 
-        # Load all nodes for the session
         all_orm_nodes = (
             db.query(ResearchNodeORM)
             .filter(ResearchNodeORM.session_id == session_uuid)
@@ -478,13 +479,43 @@ class ResearchTree(BaseModel):
             node = ResearchNode.from_orm_model(orm_node)
             node_map[node.id] = node
 
-
-        # Link children to parents
+        # Link children
         for orm_node in all_orm_nodes:
             if orm_node.parent_id:
-                parent = node_map[orm_node.parent_id]  # ✅ UUID
-                parent.subnodes.append(node_map[orm_node.id])  # ✅ UUID
+                parent = node_map[orm_node.parent_id]
+                parent.subnodes.append(node_map[orm_node.id])
+
+        # 🔥 HYDRATE QUESTIONS & CHUNKS FROM ORM
+        node_ids = list(node_map.keys())
+
+        # Questions (bulk)
+        q_rows = (
+            db.query(NodeQuestionORM.node_id, QuestionORM.text)
+            .join(QuestionORM, QuestionORM.id == NodeQuestionORM.question_id)
+            .filter(NodeQuestionORM.node_id.in_(node_ids))
+            .all()
+        )
+        # group per node
+        q_by_node = {}
+        for nid, qtext in q_rows:
+            q_by_node.setdefault(nid, []).append(qtext)
+
+        # Chunks (bulk)
+        c_rows = (
+            db.query(NodeChunkORM.node_id, ChunkORM.id, ChunkORM.text, ChunkORM.page, ChunkORM.source)
+            .join(ChunkORM, ChunkORM.id == NodeChunkORM.chunk_id)
+            .filter(NodeChunkORM.node_id.in_(node_ids))
+            .all()
+        )
+        c_by_node = {}
+        for nid, cid, ctext, cpage, csrc in c_rows:
+            c_by_node.setdefault(nid, []).append(Chunk(id=cid, text=ctext, page=cpage, source=csrc))
+
+        # Set hydrated data on each node
+        for nid, node in node_map.items():
+            node.questions = q_by_node.get(nid, [])
+            node.chunks = c_by_node.get(nid, [])
+            node.chunk_ids = {c.id for c in node.chunks}
 
         root_node = node_map[root_orm.id]
         return cls(query=root_node.title, root_node=root_node)
-
