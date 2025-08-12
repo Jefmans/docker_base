@@ -20,7 +20,7 @@ from app.utils.agent.controller import should_deepen_node
 from app.utils.agent.expander import enrich_node_with_chunks_and_subquestions, deepen_node_with_subquestions, process_node_recursively, export_tree_to_pdf
 from app.db.db import SessionLocal, get_db
 from sqlalchemy.orm import Session
-from app.utils.agent.repo import upsert_questions, attach_questions_to_node
+from app.utils.agent.repo import upsert_questions, attach_questions_to_node, update_node_fields
 from app.utils.agent.router_utils import choose_best_node_for_question
 
 
@@ -150,32 +150,102 @@ def create_outline(session_id: str):
 
 @router.post("/agent/section/{section_id}")
 def write_section_by_id(session_id: str, section_id: int):
-    # Step 1: Load full ResearchTree from DB
-    # tree = get_research_tree_db(session_id)
     db = SessionLocal()
-    tree = ResearchTree.load_from_db(db, session_id)
-    if not tree:
-        raise HTTPException(status_code=404, detail="ResearchTree not found")
+    try:
+        tree = ResearchTree.load_from_db(db, session_id)
+        if not tree:
+            raise HTTPException(status_code=404, detail="ResearchTree not found")
 
-    # Step 2: Get top-level section node from root
-    if section_id < 0 or section_id >= len(tree.root_node.subnodes):
-        raise HTTPException(status_code=400, detail="Invalid section_id")
+        if section_id < 0 or section_id >= len(tree.root_node.subnodes):
+            raise HTTPException(status_code=400, detail="Invalid section_id")
 
-    node = tree.root_node.subnodes[section_id]
+        node = tree.root_node.subnodes[section_id]
+
+        # Generate content (writer already reads questions/chunks from DB)
+        write_section(node)
+
+        update_node_fields(db, node.id, content=node.content, is_final=True)
+        db.commit()
+
+        return {
+            "session_id": session_id,
+            "section_id": section_id,
+            "heading": node.title,
+            "text": node.content
+        }
+    finally:
+        db.close()
 
 
-    # Step 4: Generate content
-    write_section(node)
+from uuid import UUID
+from app.db.models.research_node_orm import ResearchNodeORM
+from app.models.research_tree import ResearchNode
 
-    # Step 6: Save updated tree back to DB
-    save_research_tree_db(session_id, tree)
+@router.post("/agent/section/by-id")
+def write_section_by_node_id(session_id: str, node_id: UUID):
+    db = SessionLocal()
+    try:
+        # Load minimal info for the node (title needed by writer)
+        orm_node = db.query(ResearchNodeORM).filter(
+            ResearchNodeORM.id == node_id,
+            ResearchNodeORM.session_id == session_id
+        ).first()
+        if not orm_node:
+            raise HTTPException(status_code=404, detail="Node not found for this session")
 
-    return {
-        "session_id": session_id,
-        "section_id": section_id,
-        "heading": node.title,
-        "text": node.content
-    }
+        # Build a lightweight Pydantic node; writer needs id + title
+        node = ResearchNode(
+            id=orm_node.id,
+            title=orm_node.title,
+            content=orm_node.content,
+            summary=orm_node.summary,
+            conclusion=orm_node.conclusion,
+            rank=orm_node.rank,
+            level=orm_node.level,
+            is_final=orm_node.is_final,
+            questions=[], chunks=[], chunk_ids=set(), subnodes=[]
+        )
+
+        # Write using DB-backed context
+        write_section(node)
+
+        # Persist updated content
+        orm_node.content = node.content
+        orm_node.is_final = True
+        db.commit()
+
+        return {"session_id": session_id, "node_id": str(node_id), "heading": node.title, "text": node.content}
+    finally:
+        db.close()
+
+
+
+def find_node_by_display_rank(root: ResearchNode, rank: str) -> ResearchNode | None:
+    if root.display_rank == rank:
+        return root
+    for sn in root.subnodes:
+        hit = find_node_by_display_rank(sn, rank)
+        if hit:
+            return hit
+    return None
+
+@router.post("/agent/section/by-rank")
+def write_section_by_rank(session_id: str, rank: str):
+    db = SessionLocal()
+    try:
+        tree = ResearchTree.load_from_db(db, session_id)
+        node = find_node_by_display_rank(tree.root_node, rank)
+        if not node:
+            raise HTTPException(status_code=404, detail=f"No node with rank {rank}")
+
+        write_section(node)
+        tree.save_to_db(db, session_id)
+
+        return {"session_id": session_id, "rank": rank, "heading": node.title, "text": node.content}
+    finally:
+        db.close()
+
+
 
 @router.post("/agent/expand/{section_id}")
 def expand_section(session_id: str, section_id: int, top_k: int = 5):

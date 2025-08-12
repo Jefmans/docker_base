@@ -97,3 +97,19 @@ def mark_questions_consumed(db: Session, question_ids: List[UUID]) -> None:
       .filter(QuestionORM.id.in_(question_ids))\
       .update({QuestionORM.status: QuestionStatus.CONSUMED}, synchronize_session=False)
     db.flush()
+
+
+
+# app/utils/agent/repo.py
+from app.db.models.research_node_orm import ResearchNodeORM
+
+def update_node_fields(db, node_id, *, content=None, summary=None, conclusion=None, is_final=None):
+    q = db.query(ResearchNodeORM).filter(ResearchNodeORM.id == node_id)
+    updates = {}
+    if content is not None: updates["content"] = content
+    if summary is not None: updates["summary"] = summary
+    if conclusion is not None: updates["conclusion"] = conclusion
+    if is_final is not None: updates["is_final"] = is_final
+    if updates:
+        q.update(updates, synchronize_session=False)
+        db.flush()
