@@ -86,26 +86,35 @@ def generate_subquestions(session_id: str):
 def create_outline(session_id: str):
     db = SessionLocal()
     try:
+        # 1) Load the current tree structure (nodes with UUIDs)
         tree = ResearchTree.load_from_db(db, session_id)
+        if not tree:
+            raise HTTPException(status_code=404, detail="ResearchTree not found")
 
-        # 1) Build outline from existing chunks/questions
+        # 2) Generate outline from current state
+        #    (Currently uses in-memory chunks/questions; that’s fine for now.
+        #     We'll switch to ORM-sourced context later if needed.)
         outline = generate_outline_from_tree(tree)
 
-        # 2) Convert outline → nodes in the Pydantic tree
+        # 3) Build Pydantic child nodes from the outline
         tree.root_node.subnodes = [
             ResearchTree.node_from_outline_section(section)
             for section in outline.sections
         ]
         tree.assign_rank_and_level()
 
+        # Set/keep root metadata
         tree.root_node.title = outline.title or tree.root_node.title
         tree.root_node.questions = [q for sec in outline.sections for q in sec.questions]
 
-        # 3) Persist nodes to ORM (this preserves node.id UUIDs)
+        # 4) Persist the new/updated node hierarchy to the ORM.
+        #    Important: we must save BEFORE attaching questions,
+        #    so that each new node has a stable UUID in the DB.
         tree.save_to_db(db, session_id)
 
-        # 4) Attach outline questions to their corresponding nodes (one-to-one by index)
-        #    outline.sections[i]  -> tree.root_node.subnodes[i]
+        # 5) Attach outline questions to their corresponding section nodes
+        #    We map outline.sections[i] -> tree.root_node.subnodes[i]
+        #    (zip will stop at the shortest, so no index errors)
         for section, node in zip(outline.sections, tree.root_node.subnodes):
             if section.questions:
                 qids = upsert_questions(db, section.questions, source="outline")
@@ -116,10 +125,19 @@ def create_outline(session_id: str):
         return {
             "session_id": session_id,
             "outline": outline.dict(),
-            "node_count": len(tree.root_node.subnodes)
+            "node_count": len(tree.root_node.subnodes),
         }
+
+    except HTTPException:
+        # bubble up FastAPI HTTP errors unchanged
+        db.rollback()
+        raise
+    except Exception as e:
+        db.rollback()
+        raise HTTPException(status_code=500, detail=f"Outline failed: {str(e)}")
     finally:
         db.close()
+
 
 
 
