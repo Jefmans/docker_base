@@ -220,30 +220,39 @@ def write_section_by_node_id(session_id: str, node_id: UUID):
 
 
 
-def find_node_by_display_rank(root: ResearchNode, rank: str) -> ResearchNode | None:
-    if root.display_rank == rank:
-        return root
-    for sn in root.subnodes:
-        hit = find_node_by_display_rank(sn, rank)
-        if hit:
-            return hit
-    return None
-
-@router.post("/agent/section/by-rank")
+@router.post("/agent/section/by-rank/{rank}")
 def write_section_by_rank(session_id: str, rank: str):
     db = SessionLocal()
     try:
         tree = ResearchTree.load_from_db(db, session_id)
+        if not tree:
+            raise HTTPException(status_code=404, detail="ResearchTree not found")
+
+        # find node by rank path like "2.1.3"
+        def find_node_by_display_rank(node, target: str):
+            if node.display_rank == target:
+                return node
+            for sn in node.subnodes:
+                hit = find_node_by_display_rank(sn, target)
+                if hit:
+                    return hit
+            return None
+
         node = find_node_by_display_rank(tree.root_node, rank)
         if not node:
             raise HTTPException(status_code=404, detail=f"No node with rank {rank}")
 
+        # write using DB-backed context (writer pulls questions/chunks from ORM)
         write_section(node)
-        tree.save_to_db(db, session_id)
+
+        # persist this node’s content back to ORM
+        tree.save_to_db(db, session_id)  # or use a tiny updater if you prefer
+        db.commit()
 
         return {"session_id": session_id, "rank": rank, "heading": node.title, "text": node.content}
     finally:
         db.close()
+
 
 
 
