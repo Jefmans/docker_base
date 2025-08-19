@@ -9,6 +9,7 @@ from app.db.models.chunk_orm import ChunkORM
 from app.db.models.question_orm import QuestionORM, QuestionStatus
 from app.db.models.node_chunk_orm import NodeChunkORM
 from app.db.models.node_question_orm import NodeQuestionORM
+from app.db.models.research_node_orm import ResearchNodeORM
 
 # ---- Chunks ----
 def upsert_chunks(db: Session, chunks: Iterable[dict]) -> None:
@@ -100,8 +101,7 @@ def mark_questions_consumed(db: Session, question_ids: List[UUID]) -> None:
 
 
 
-# app/utils/agent/repo.py
-from app.db.models.research_node_orm import ResearchNodeORM
+
 
 def update_node_fields(db, node_id, *, content=None, summary=None, conclusion=None, is_final=None):
     q = db.query(ResearchNodeORM).filter(ResearchNodeORM.id == node_id)

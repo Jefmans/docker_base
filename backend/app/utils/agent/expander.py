@@ -8,6 +8,14 @@ from app.utils.agent.writer import write_section, write_summary, write_conclusio
 from app.utils.agent.repo import upsert_chunks, attach_chunks_to_node, upsert_questions, attach_questions_to_node
 from app.db.db import SessionLocal  # add this import
 
+# utils/agent/expander.py (top)
+import hashlib
+
+def stable_chunk_id(text: str, meta_id: str | None = None) -> str:
+    return meta_id or hashlib.sha1(text.encode("utf-8")).hexdigest()
+
+
+
 
 def enrich_node_with_chunks_and_subquestions(node: ResearchNode, tree: ResearchTree, top_k: int = 10):
     # 0) build a query
@@ -18,7 +26,8 @@ def enrich_node_with_chunks_and_subquestions(node: ResearchNode, tree: ResearchT
 
     chunk_dicts = []
     for i, doc in enumerate(results):
-        chunk_id = doc.metadata.get("id", f"{hash(doc.page_content)}_{i}")
+        # inside enrich_node_with_chunks_and_subquestions(...)
+        chunk_id = stable_chunk_id(doc.page_content, doc.metadata.get("id"))
         chunk_dicts.append({
             "id": chunk_id,
             "text": doc.page_content,
@@ -68,24 +77,35 @@ def deepen_node_with_subquestions(node, tree, top_k=5):
 
 
 
+# utils/agent/expander.py
+from app.utils.agent.repo import update_node_fields
+from app.db.db import SessionLocal
 
 def process_node_recursively(node: ResearchNode, tree: ResearchTree, top_k: int = 10):
-    # 1. Enrich with chunks and subquestions
     enrich_node_with_chunks_and_subquestions(node, tree, top_k=top_k)
-
-    # 2. Deepen if necessary (i.e. add new chunks via subquestions)
     if should_deepen_node(node):
         deepen_node_with_subquestions(node, tree, top_k=top_k)
 
-    # 3. Write section content
+    # Generate text
     write_section(node)
     node.summary = write_summary(node)
     node.conclusion = write_conclusion(node)
-    
 
-    # 4. Recurse through subnodes
+    # Persist
+    db = SessionLocal()
+    try:
+        update_node_fields(db, node.id,
+                           content=node.content,
+                           summary=node.summary,
+                           conclusion=node.conclusion,
+                           is_final=True)
+        db.commit()
+    finally:
+        db.close()
+
     for subnode in node.subnodes:
         process_node_recursively(subnode, tree, top_k=top_k)
+
 
         
 
@@ -102,3 +122,5 @@ def export_tree_to_pdf(tree: ResearchTree, output_pdf="output.pdf"):
         subprocess.run(["pdflatex", "-interaction=nonstopmode", tex_path], cwd=tmpdir)
         with open(pdf_path, "rb") as f:
             return f.read()
+        
+

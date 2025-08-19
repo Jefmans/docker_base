@@ -1,6 +1,6 @@
-from typing import List, Optional, Dict, Set
+from typing import List, Optional, Dict, Set, TYPE_CHECKING
 from pydantic import BaseModel, Field
-from app.models.outline_model import OutlineSection
+
 from uuid import uuid4
 from uuid import UUID
 from sqlalchemy.orm import Session
@@ -11,7 +11,9 @@ from app.db.models.question_orm import QuestionORM
 from app.db.models.node_chunk_orm import NodeChunkORM
 from app.db.models.chunk_orm import ChunkORM
 
-
+if TYPE_CHECKING:
+    # Only for type checkers; not executed at runtime -> no circular import
+    from app.models.outline_model import OutlineSection
 
 class Chunk(BaseModel):
     id: str
@@ -23,6 +25,7 @@ class Chunk(BaseModel):
 class ResearchNode(BaseModel):
     id: UUID = Field(default_factory=uuid4)  # ✅ Use UUID directly
     title: str
+    goals: Optional[str] = None  
     questions: List[str] = []
     generated_questions: List[str] = []
     chunks: List[Chunk] = []
@@ -58,19 +61,11 @@ class ResearchNode(BaseModel):
             return f"{self.parent.title}"
         return None
 
-    @staticmethod
-    def from_outline_section(section: OutlineSection, parent_rank: str = "") -> "ResearchNode":
-        rank = f"{parent_rank}.{len(section.subsections) + 1}" if parent_rank else "1"
-        node = ResearchNode(
-            title=section.heading,
-            questions=section.questions,
-            rank=rank,
-            subnodes=[ResearchNode.from_outline_section(sub, rank) for sub in section.subsections]
-        )
-        return node
 
     def add_subnode(self, node: "ResearchNode"):
         node.parent = self
+        node.level = self.level + 1
+        node.rank  = len(self.subnodes) + 1
         self.subnodes.append(node)
 
     def walk(self) -> List["ResearchNode"]:
@@ -88,6 +83,7 @@ class ResearchNode(BaseModel):
         return cls(
             id=orm_node.id,
             title=orm_node.title,
+            goals=orm_node.goals,           
             content=orm_node.content,
             summary=orm_node.summary,
             conclusion=orm_node.conclusion,
@@ -102,27 +98,11 @@ class ResearchNode(BaseModel):
         )
 
 
-    @staticmethod
-    def from_outline_section(section: OutlineSection, parent_rank: str = "") -> "ResearchNode":
-        # Generate the new rank based on the parent rank and current level
-        rank = f"{parent_rank}.{len(section.subsections) + 1}" if parent_rank else "1"
-
-        node = ResearchNode(
-            title=section.heading,
-            questions=section.questions,
-            rank=rank,  # Track the rank here
-            subnodes=[ResearchNode.from_outline_section(sub, rank) for sub in section.subsections]
-        )
-        return node
 
 
     class Config:
         arbitrary_types_allowed = True
 
-
-    def add_subnode(self, node: "ResearchNode"):
-        node.parent = self
-        self.subnodes.append(node)
 
     def all_chunks(self) -> List[Chunk]:
         return self.chunks + [c for sn in self.subnodes for c in sn.all_chunks()]
@@ -138,9 +118,6 @@ class ResearchNode(BaseModel):
             if result:
                 return result
         return None
-
-    def mark_final(self):
-        self.is_final = True
 
     def needs_more_chunks(self, threshold: int = 3) -> bool:
         return len(self.chunks) < threshold
@@ -160,11 +137,6 @@ class ResearchTree(BaseModel):
     class Config:
         arbitrary_types_allowed = True
 
-    def add_subnode(self, parent_title: str, subnode_data: dict):
-        parent_node = self.root_node.find_node_by_title(parent_title)
-        if parent_node:
-            subnode = ResearchNode(**subnode_data)
-            parent_node.add_subnode(subnode)
 
     def deduplicate_all(self):
         self._deduplicate_chunks()
@@ -205,7 +177,8 @@ class ResearchTree(BaseModel):
     ) -> ResearchNode:
         node = ResearchNode(
             title=section.heading,
-            questions=section.questions,
+            goals=section.goals,
+            questions=list(section.questions or []),
             subnodes=[
                 ResearchTree.node_from_outline_section(sub)
                 for sub in section.subsections or []
@@ -215,18 +188,20 @@ class ResearchTree(BaseModel):
 
 
     
+
     def assign_rank_and_level(self):
-        def _assign(node: ResearchNode, parent: Optional[ResearchNode], level: int):
+        def _recurse(node: ResearchNode, parent: Optional[ResearchNode], level: int):
             node.parent = parent
             node.level = level
-            for i, sub in enumerate(node.subnodes):
-                sub.rank = i + 1
-                _assign(sub, node, level + 1)
+            for i, child in enumerate(node.subnodes, start=1):
+                child.rank = i
+                _recurse(child, node, level + 1)
 
+        self.root_node.parent = None
         self.root_node.rank = 1
         self.root_node.level = 1
-        self.root_node.parent = None
-        _assign(self.root_node, None, 0)
+        _recurse(self.root_node, None, 1)
+
 
 
 
@@ -417,6 +392,7 @@ class ResearchTree(BaseModel):
             if db_node:
                 # ✅ Update existing fields
                 db_node.title = node.title
+                db_node.goals = node.goals      
                 db_node.content = node.content
                 db_node.summary = node.summary
                 db_node.conclusion = node.conclusion
@@ -431,6 +407,7 @@ class ResearchTree(BaseModel):
                     session_id=session_id,
                     parent_id=parent_id,
                     title=node.title,
+                    goals=node.goals,
                     content=node.content,
                     summary=node.summary,
                     conclusion=node.conclusion,
@@ -453,10 +430,11 @@ class ResearchTree(BaseModel):
 
     @classmethod
     def load_from_db(cls, db: Session, session_id: str) -> "ResearchTree":
-        try:
-            session_uuid = session_id
-        except ValueError:
-            raise ValueError("Invalid session_id format; must be a valid UUID")
+        session_uuid = session_id
+        sess = db.query(SessionModel).filter(SessionModel.id == session_uuid).first()
+        if not sess:
+            raise ValueError("Session not found")
+        original_query = sess.query
 
         root_orm = (
             db.query(ResearchNodeORM)
@@ -518,4 +496,30 @@ class ResearchTree(BaseModel):
             node.chunk_ids = {c.id for c in node.chunks}
 
         root_node = node_map[root_orm.id]
-        return cls(query=root_node.title, root_node=root_node)
+        return cls(query=original_query, root_node=root_node)
+
+
+    def apply_outline(self, outline: "Outline", db, session_id: str):
+        """
+        Convert Outline → ResearchNode children, assign rank/level,
+        persist nodes, and attach section questions to matching nodes.
+        """
+        from app.utils.agent.repo import upsert_questions, attach_questions_to_node
+
+        # 1) Convert outline structure into children
+        self.root_node.subnodes = [
+            ResearchTree.node_from_outline_section(s) for s in outline.sections
+        ]
+        # (optional) update root title if outline sets one
+        if outline.title:
+            self.root_node.title = outline.title
+
+        # 2) Compute rank/level and persist
+        self.assign_rank_and_level()
+        self.save_to_db(db, session_id)
+
+        # 3) Attach questions (OutlineSection.questions) to the corresponding new nodes
+        for section, node in zip(outline.sections, self.root_node.subnodes):
+            if section.questions:
+                qids = upsert_questions(db, section.questions, source="outline")
+                attach_questions_to_node(db, node.id, qids)

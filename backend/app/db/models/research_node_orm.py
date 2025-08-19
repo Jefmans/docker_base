@@ -14,6 +14,7 @@ class ResearchNodeORM(Base):
     # children = relationship("ResearchNodeORM", backref="parent", cascade="all, delete")
 
     title = Column(String, nullable=False)
+    goals = Column(Text, nullable=True)  
     content = Column(Text, nullable=True)
     summary = Column(Text, nullable=True)
     conclusion = Column(Text, nullable=True)

@@ -35,9 +35,13 @@ def write_section(node: ResearchNode):
         chunks = get_node_chunks(db, node.id)
         context = "\n\n".join(c.text for c in chunks[:20])
 
+        goals = (node.goals or "").strip()
+
         prompt = f"""
         You are a scientific writer.
         Write a detailed section titled "{node.title}".
+
+        {'Goals for this section:\n' + goals if goals else ''}
 
         QUESTIONS TO ADDRESS:
         {chr(10).join(f"- {q}" for q in questions)}
@@ -88,7 +92,12 @@ def write_summary(node: ResearchNode) -> str:
 
 
 def write_conclusion(node: ResearchNode) -> str:
-    context = "\n\n".join(c.text for c in node.chunks[:20])
+    db = SessionLocal()
+    try:
+        chunks = get_node_chunks(db, node.id)
+        context = "\n\n".join(c.text for c in chunks[:20])
+    finally:
+        db.close()
     if not context.strip():
         return f"(No conclusion available for: {node.title})"
 
