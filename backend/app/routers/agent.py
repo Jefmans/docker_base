@@ -372,6 +372,8 @@ def export_tree_content(session_id: str):
     def serialize_node(node):
         return {
             "title": node.title,
+            "goals": node.goals,                     
+            "questions": list(node.questions or []), 
             "content": node.content,
             "summary": node.summary,
             "conclusion": node.conclusion,
