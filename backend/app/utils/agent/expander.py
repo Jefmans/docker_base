@@ -45,7 +45,7 @@ def enrich_node_with_chunks_and_subquestions(node: ResearchNode, tree: ResearchT
         attach_questions_to_node(db, node.id, qids)
 
         # make these visible to controller.should_deepen_node
-        node.generated_questions_texts = subqs
+        node.generated_questions = subqs
         db.commit()
     finally:
         db.close()
@@ -58,7 +58,7 @@ from app.db.db import SessionLocal
 def deepen_node_with_subquestions(node, tree, top_k=5):
     db = SessionLocal()
     try:
-        for q in getattr(node, "generated_questions_texts", []):
+        for q in getattr(node, "generated_questions", []):
             results = search_chunks(q, top_k=top_k, return_docs=True)
             chunk_dicts = []
             for i, doc in enumerate(results):

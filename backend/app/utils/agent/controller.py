@@ -11,7 +11,7 @@ def should_deepen_node(node, similarity_threshold=0.8, min_novel=2):
     db = SessionLocal()
     try:
         assigned = [q.text for q in get_node_questions(db, node.id)]
-        generated = getattr(node, "generated_questions_texts", [])  # or pass them in
+        generated = getattr(node, "generated_questions", [])  # or pass them in
         existing = [q.lower().strip() for q in assigned]
 
         novel = 0
