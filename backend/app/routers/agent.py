@@ -164,14 +164,23 @@ def expand_section(session_id: str, section_id: int, top_k: int = 5):
 
     node = tree.root_node.subnodes[section_id]
 
+    # remember what we had before
+    before_ids = set(getattr(node, "chunk_ids", set()))
+
+    # enrich (writes to DB)
     enrich_node_with_chunks_and_subquestions(node, tree, top_k=top_k)
 
-    # save_research_tree_db(session_id, tree)
+    # ⬇️ REFRESH from DB so in-memory node reflects new attachments
+    orm_chunks = get_node_chunks(db, node.id)
+    node.chunks = [Chunk(id=c.id, text=c.text, page=c.page, source=c.source) for c in orm_chunks]
+    node.chunk_ids = {c.id for c in orm_chunks}
+
+    new_chunks = [c for c in node.chunks if c.id not in before_ids]
 
     return {
         "status": "expanded",
         "section": node.title,
-        "new_chunks": [c.text[:100] for c in node.chunks],
+        "new_chunks": [c.text[:100] for c in new_chunks],
         "generated_questions": node.generated_questions
     }
 
