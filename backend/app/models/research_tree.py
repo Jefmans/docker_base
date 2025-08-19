@@ -1,3 +1,5 @@
+# at the very top of the file
+from __future__ import annotations
 from typing import List, Optional, Dict, Set, TYPE_CHECKING
 from pydantic import BaseModel, Field
 
@@ -10,10 +12,12 @@ from app.db.models.node_question_orm import NodeQuestionORM
 from app.db.models.question_orm import QuestionORM
 from app.db.models.node_chunk_orm import NodeChunkORM
 from app.db.models.chunk_orm import ChunkORM
+from app.db.db import Session as SessionModel
 
-if TYPE_CHECKING:
-    # Only for type checkers; not executed at runtime -> no circular import
-    from app.models.outline_model import OutlineSection
+
+# if TYPE_CHECKING:
+#     # Only for type checkers; not executed at runtime -> no circular import
+#     from app.models.outline_model import OutlineSection
 
 class Chunk(BaseModel):
     id: str
@@ -26,10 +30,10 @@ class ResearchNode(BaseModel):
     id: UUID = Field(default_factory=uuid4)  # ✅ Use UUID directly
     title: str
     goals: Optional[str] = None  
-    questions: List[str] = []
-    generated_questions: List[str] = []
-    chunks: List[Chunk] = []
-    chunk_ids: Set[str] = set()
+    questions: List[str] = Field(default_factory=list)
+    generated_questions: List[str] = Field(default_factory=list)
+    chunks: List[Chunk] = Field(default_factory=list)
+    chunk_ids: Set[str] = Field(default_factory=set)
 
     content: Optional[str] = None
     summary: Optional[str] = None
@@ -37,7 +41,7 @@ class ResearchNode(BaseModel):
     is_final: bool = False
 
     parent: Optional["ResearchNode"] = None
-    subnodes: List["ResearchNode"] = []
+    subnodes: List["ResearchNode"] = Field(default_factory=list)
 
     rank: Optional[int] = 0
     level: Optional[int] = 0
@@ -131,8 +135,8 @@ ResearchNode.update_forward_refs()
 class ResearchTree(BaseModel):
     query: str
     root_node: ResearchNode
-    used_questions: Set[str] = set()
-    used_chunk_ids: Set[str] = set()
+    used_questions: Set[str] = Field(default_factory=set)
+    used_chunk_ids: Set[str] = Field(default_factory=set)
     
     class Config:
         arbitrary_types_allowed = True
@@ -173,7 +177,7 @@ class ResearchTree(BaseModel):
         
     @staticmethod
     def node_from_outline_section(
-        section: OutlineSection
+        section: "OutlineSection"
     ) -> ResearchNode:
         node = ResearchNode(
             title=section.heading,

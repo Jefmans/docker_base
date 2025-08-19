@@ -292,7 +292,7 @@ def full_run(request: AgentQueryRequest):
 
         # STEP 4: Generate subquestions and outline
         subq = generate_subquestions_from_chunks(top_chunks, request.query)
-        outline = generate_outline(subq, request.query)
+        outline = generate_outline_from_tree(tree)  # if you want to base it on the current tree
 
         # STEP 5: Attach outline to tree
         tree.root_node.title = outline.title or request.query
