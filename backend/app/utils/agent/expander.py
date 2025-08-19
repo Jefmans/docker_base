@@ -47,8 +47,6 @@ def enrich_node_with_chunks_and_subquestions(node: ResearchNode, tree: ResearchT
         qids = upsert_questions(db, subqs, source="expansion")
         attach_questions_to_node(db, node.id, qids)
 
-        # make these visible to controller.should_deepen_node
-        node.generated_questions = subqs
         db.commit()
     finally:
         db.close()
@@ -58,25 +56,28 @@ def enrich_node_with_chunks_and_subquestions(node: ResearchNode, tree: ResearchT
 
 from app.db.db import SessionLocal
 
-def deepen_node_with_subquestions(node, tree, top_k=5):
+# app/utils/agent/expander.py
+def deepen_node_with_subquestions(node, questions: list[str], top_k=5):
     db = SessionLocal()
     try:
-        for q in getattr(node, "generated_questions", []):
+        for q in questions:
             results = search_chunks(q, top_k=top_k, return_docs=True)
             chunk_dicts = []
             for i, doc in enumerate(results):
-                chunk_id = doc.metadata.get("id", f"{hash(doc.page_content)}_{i}")
+                chunk_id = stable_chunk_id(doc.page_content, doc.metadata.get("id"))
                 chunk_dicts.append({
                     "id": chunk_id,
                     "text": doc.page_content,
                     "page": doc.metadata.get("page"),
                     "source": doc.metadata.get("source"),
                 })
+            # de-dupe + insert + attach (your hardened helpers)
             upsert_chunks(db, chunk_dicts)
             attach_chunks_to_node(db, node.id, [c["id"] for c in chunk_dicts])
         db.commit()
     finally:
         db.close()
+
 
 
 

@@ -95,7 +95,7 @@ def generate_subquestions(session_id: str):
 
     db.commit()
     db.close()
-    return {"session_id": session_id, "generated_questions": subq, "count": len(qids)}
+    return {"session_id": session_id, "questions": subq, "count": len(qids)}
 
 
 
@@ -181,43 +181,56 @@ def expand_section(session_id: str, section_id: int, top_k: int = 5):
         "status": "expanded",
         "section": node.title,
         "new_chunks": [c.text[:100] for c in new_chunks],
-        "generated_questions": node.generated_questions
+        "questions": node.questions
     }
 
 
+# app/routers/agent.py
+from app.utils.agent.repo import get_node_questions
+from app.db.models.question_orm import QuestionStatus
+
 @router.post("/agent/deepen/{section_id}")
 def deepen_section(session_id: str, section_id: int, top_k: int = 5):
-    # tree = get_research_tree_db(session_id)
     db = SessionLocal()
-    tree = ResearchTree.load_from_db(db, session_id)
-    if not tree:
-        raise HTTPException(status_code=404, detail="ResearchTree not found")
+    try:
+        tree = ResearchTree.load_from_db(db, session_id)
+        if not tree:
+            raise HTTPException(status_code=404, detail="ResearchTree not found")
 
-    if section_id < 0 or section_id >= len(tree.root_node.subnodes):
-        raise HTTPException(status_code=400, detail="Invalid section_id")
+        if section_id < 0 or section_id >= len(tree.root_node.subnodes):
+            raise HTTPException(status_code=400, detail="Invalid section_id")
 
-    node = tree.root_node.subnodes[section_id]
+        node = tree.root_node.subnodes[section_id]
 
-    if not node.generated_questions:
-        return {
-            "status": "skipped",
-            "reason": "No generated subquestions — run /expand first"
-        }
+        # Pull questions for this node from DB
+        q_objs = get_node_questions(db, node.id)
+        # choose what to deepen on (e.g., only expansion/assigned)
+        candidate_q = [
+            q.text for q in q_objs
+            if q.status == QuestionStatus.ASSIGNED and q.source in ("expansion", "outline", "root_subq")
+        ]
 
-    should_expand = should_deepen_node(node)
-    if should_expand:
-        deepen_node_with_subquestions(node, tree, top_k=top_k)
-        # save_research_tree_db(session_id, tree)
-        return {
-            "status": "deepened",
-            "new_chunks": [c.text[:100] for c in node.chunks],
-            "used_questions": node.generated_questions
-        }
-    else:
-        return {
-            "status": "skipped",
-            "reason": "Subquestions too similar to existing questions — no useful gain"
-        }
+        if not candidate_q:
+            return {"status": "skipped", "reason": "No questions on this node — run /expand or attach questions first"}
+
+        if should_deepen_node(node):
+            # Update deepen helper to accept questions (see next snippet)
+            deepen_node_with_subquestions(node, candidate_q, top_k=top_k)
+            # After deepening, reload chunks so you can return the delta if you want (Option A pattern)
+            from app.utils.agent.repo import get_node_chunks
+            orm_chunks = get_node_chunks(db, node.id)
+            from app.models.research_tree import Chunk
+            node.chunks = [Chunk(id=c.id, text=c.text, page=c.page, source=c.source) for c in orm_chunks]
+            return {
+                "status": "deepened",
+                "new_chunks": [c.text[:100] for c in node.chunks],
+                "used_questions": candidate_q,
+            }
+        else:
+            return {"status": "skipped", "reason": "Not enough useful questions to deepen"}
+    finally:
+        db.close()
+
 
 
 

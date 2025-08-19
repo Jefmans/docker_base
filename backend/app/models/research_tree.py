@@ -31,7 +31,6 @@ class ResearchNode(BaseModel):
     title: str
     goals: Optional[str] = None  
     questions: List[str] = Field(default_factory=list)
-    generated_questions: List[str] = Field(default_factory=list)
     chunks: List[Chunk] = Field(default_factory=list)
     chunk_ids: Set[str] = Field(default_factory=set)
 
@@ -95,7 +94,6 @@ class ResearchNode(BaseModel):
             level=orm_node.level,
             is_final=orm_node.is_final,
             questions=[],
-            generated_questions=[],
             chunks=[],
             chunk_ids=set(),
             subnodes=[]
@@ -261,7 +259,6 @@ class ResearchTree(BaseModel):
                 "display_rank": node.display_rank, # ✅ computed property
                 # "ranked_title": node.ranked_title,  # ✅ computed property
                 "questions": node.questions,
-                "generated_questions": node.generated_questions,
                 "chunks": [c.dict() for c in node.chunks],
                 "chunk_ids": list(node.chunk_ids),
                 "content": node.content,
