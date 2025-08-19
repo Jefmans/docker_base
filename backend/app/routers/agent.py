@@ -208,6 +208,7 @@ def deepen_section(session_id: str, section_id: int, top_k: int = 5):
         novel_expansion = get_novel_expansion_questions(
             node, db, q_sim_thresh=0.80, title_sim_thresh=0.70
         )
+        print("NEW QUESTIONS", novel_expansion)
         if len(novel_expansion) < 2:
             return {"status": "skipped", "reason": "Not enough novel expansion questions"}
 
