@@ -25,7 +25,7 @@ def enrich_node_with_chunks_and_subquestions(node: ResearchNode, tree: ResearchT
     results = search_chunks(combined_query, top_k=top_k, return_docs=True)
 
     chunk_dicts = []
-    for i, doc in enumerate(results):
+    for doc in results:
         # inside enrich_node_with_chunks_and_subquestions(...)
         chunk_id = stable_chunk_id(doc.page_content, doc.metadata.get("id"))
         chunk_dicts.append({
@@ -34,6 +34,9 @@ def enrich_node_with_chunks_and_subquestions(node: ResearchNode, tree: ResearchT
             "page": doc.metadata.get("page"),
             "source": doc.metadata.get("source"),
         })
+
+    # ✅ de-dupe within this list BEFORE touching DB
+    chunk_dicts = list({c["id"]: c for c in chunk_dicts}.values())        
 
     db = SessionLocal()
     try:

@@ -2,6 +2,7 @@
 from typing import List, Iterable
 from sqlalchemy.orm import Session
 from sqlalchemy import func
+from sqlalchemy.dialects.postgresql import insert as pg_insert  # <-- add this
 from uuid import UUID
 
 from app.db.models.research_node_orm import ResearchNodeORM
@@ -9,36 +10,49 @@ from app.db.models.chunk_orm import ChunkORM
 from app.db.models.question_orm import QuestionORM, QuestionStatus
 from app.db.models.node_chunk_orm import NodeChunkORM
 from app.db.models.node_question_orm import NodeQuestionORM
-from app.db.models.research_node_orm import ResearchNodeORM
 
-# ---- Chunks ----
 def upsert_chunks(db: Session, chunks: Iterable[dict]) -> None:
     """
     chunks: iterable of dicts with keys: id (str), text, page?, source?
+    De-dupes within this batch and inserts only missing ones.
     """
-    existing_ids = {
-        cid for (cid,) in db.query(ChunkORM.id).filter(ChunkORM.id.in_([c["id"] for c in chunks])).all()
-    }
+    # 1) De-dupe within-batch by id (first occurrence wins)
+    by_id = {}
     for c in chunks:
-        if c["id"] in existing_ids:
-            # Optional: update text/page/source if you want
-            pass
-        else:
-            db.add(ChunkORM(**c))
+        cid = c["id"]
+        if cid not in by_id:
+            by_id[cid] = c
+    ids = list(by_id.keys())
+
+    # 2) Filter out ones that already exist in DB
+    existing_ids = {
+        cid for (cid,) in db.query(ChunkORM.id).filter(ChunkORM.id.in_(ids)).all()
+    }
+    to_insert = [by_id[cid] for cid in ids if cid not in existing_ids]
+
+    # 3) Bulk insert with ON CONFLICT DO NOTHING (protects again duplicates)
+    if to_insert:
+        stmt = pg_insert(ChunkORM.__table__).values(to_insert)
+        stmt = stmt.on_conflict_do_nothing(index_elements=["id"])
+        db.execute(stmt)
+
     db.flush()
 
 def attach_chunks_to_node(db: Session, node_id: UUID, chunk_ids: List[str]) -> None:
     if not chunk_ids:
         return
+    chunk_ids = list(set(chunk_ids))  # de-dupe input list
     existing = {
-        (nid, cid) for (nid, cid) in db.query(NodeChunkORM.node_id, NodeChunkORM.chunk_id)
-                                    .filter(NodeChunkORM.node_id == node_id,
-                                            NodeChunkORM.chunk_id.in_(chunk_ids)).all()
+        (nid, cid)
+        for (nid, cid) in db.query(NodeChunkORM.node_id, NodeChunkORM.chunk_id)
+            .filter(NodeChunkORM.node_id == node_id,
+                    NodeChunkORM.chunk_id.in_(chunk_ids)).all()
     }
     for cid in chunk_ids:
         if (node_id, cid) not in existing:
             db.add(NodeChunkORM(node_id=node_id, chunk_id=cid))
     db.flush()
+
 
 def get_node_chunks(db: Session, node_id: UUID) -> List[ChunkORM]:
     q = (db.query(ChunkORM)
