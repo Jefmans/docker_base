@@ -504,26 +504,30 @@ class ResearchTree(BaseModel):
 
 
     def apply_outline(self, outline: "Outline", db, session_id: str):
-        """
-        Convert Outline → ResearchNode children, assign rank/level,
-        persist nodes, and attach section questions to matching nodes.
-        """
         from app.utils.agent.repo import upsert_questions, attach_questions_to_node
 
-        # 1) Convert outline structure into children
+        # 1) Convert outline -> nodes
         self.root_node.subnodes = [
             ResearchTree.node_from_outline_section(s) for s in outline.sections
         ]
-        # (optional) update root title if outline sets one
         if outline.title:
             self.root_node.title = outline.title
 
-        # 2) Compute rank/level and persist
+        # 2) Rank/level + persist nodes (so we have DB ids to attach to)
         self.assign_rank_and_level()
         self.save_to_db(db, session_id)
 
-        # 3) Attach questions (OutlineSection.questions) to the corresponding new nodes
-        for section, node in zip(outline.sections, self.root_node.subnodes):
-            if section.questions:
+        # 3) Attach questions for ALL levels
+        def attach_all(section, node):
+            if getattr(section, "questions", None):
                 qids = upsert_questions(db, section.questions, source="outline")
                 attach_questions_to_node(db, node.id, qids)
+            # recurse
+            for ssub, nsub in zip(section.subsections or [], node.subnodes or []):
+                attach_all(ssub, nsub)
+
+        for section, node in zip(outline.sections, self.root_node.subnodes):
+            attach_all(section, node)
+
+        db.commit()
+
