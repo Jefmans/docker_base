@@ -81,35 +81,49 @@ def deepen_node_with_subquestions(node, questions: list[str], top_k=5):
 
 
 
-# utils/agent/expander.py
+from app.utils.agent.controller import should_deepen_node, get_novel_expansion_questions
 from app.utils.agent.repo import update_node_fields
-from app.db.db import SessionLocal
 
 def process_node_recursively(node: ResearchNode, tree: ResearchTree, top_k: int = 10):
+    # 1) Expand the node (chunks + new expansion questions)
     enrich_node_with_chunks_and_subquestions(node, tree, top_k=top_k)
-    if should_deepen_node(node):
-        deepen_node_with_subquestions(node, tree, top_k=top_k)
 
-    # Generate text
+    # 2) Decide whether to deepen using DB-based novelty
+    if should_deepen_node(node):
+        # Use only the novel expansion questions
+        db = SessionLocal()
+        try:
+            novel_expansion = get_novel_expansion_questions(
+                node, db, q_sim_thresh=0.80, title_sim_thresh=0.70
+            )
+        finally:
+            db.close()
+
+        if novel_expansion:
+            deepen_node_with_subquestions(node, novel_expansion, top_k=top_k)
+
+    # 3) Generate text for this node
     write_section(node)
     node.summary = write_summary(node)
     node.conclusion = write_conclusion(node)
 
-    # Persist
+    # 4) Persist generated fields
     db = SessionLocal()
     try:
-        update_node_fields(db, node.id,
-                           content=node.content,
-                           summary=node.summary,
-                           conclusion=node.conclusion,
-                           is_final=True)
+        update_node_fields(
+            db, node.id,
+            content=node.content,
+            summary=node.summary,
+            conclusion=node.conclusion,
+            is_final=True
+        )
         db.commit()
     finally:
         db.close()
 
+    # 5) Recurse
     for subnode in node.subnodes:
         process_node_recursively(subnode, tree, top_k=top_k)
-
 
         
 
@@ -127,27 +141,37 @@ def export_tree_to_pdf(tree: ResearchTree, output_pdf="output.pdf"):
         with open(pdf_path, "rb") as f:
             return f.read()
         
-
-# app/utils/agent/expander.py (new function)
 from app.models.research_tree import ResearchNode
-from app.utils.agent.repo import attach_questions_to_node, attach_chunks_to_node
+from app.utils.agent.repo import attach_questions_to_node
 from app.db.db import SessionLocal
 from app.db.models.research_node_orm import ResearchNodeORM
+from sqlalchemy import select
+from app.db.models.question_orm import QuestionORM
 
-def create_subnodes_from_clusters(node: ResearchNode, clusters_q: list[list[str]],
-                                  cluster_title_fn, db=None):
+def create_subnodes_from_clusters(
+    node: ResearchNode,
+    clusters_q: list[list[str]],
+    cluster_title_fn,
+    db=None
+):
     """
-    cluster_title_fn: callable(list[str]) -> str   # produce a title for each cluster
-    clusters_q are lists of question texts (you can also build clusters from chunks similarly)
+    For each cluster of question texts, create a child node under `node` and
+    attach those questions to the new child. Titles come from cluster_title_fn.
     """
     local_db = db or SessionLocal()
     try:
-        # get DB ids for these question texts
-        from sqlalchemy import func
-        from app.db.models.question_orm import QuestionORM
-        q_to_id = {q.text.lower(): q.id for q in local_db.query(QuestionORM).all()}  # or fetch only needed ones
+        # Resolve parent ORM to get the correct session_id
+        parent_orm = local_db.execute(
+            select(ResearchNodeORM).where(ResearchNodeORM.id == node.id)
+        ).scalar_one_or_none()
+        if not parent_orm:
+            return
+        session_id = parent_orm.session_id
 
-        # existing children count to assign rank
+        # Map question text -> id (lowercased)
+        q_rows = local_db.execute(select(QuestionORM.id, QuestionORM.text)).all()
+        q_to_id = {text.lower(): qid for (qid, text) in q_rows}
+
         current_children_count = len(node.subnodes)
 
         for i, cluster in enumerate(clusters_q, start=1):
@@ -155,33 +179,31 @@ def create_subnodes_from_clusters(node: ResearchNode, clusters_q: list[list[str]
                 continue
             title = cluster_title_fn(cluster)
 
-            # create child node
             child_orm = ResearchNodeORM(
-                session_id=node.parent.id if node.parent else None,  # your save_to_db handles session_id; alternatively pass it in
+                session_id=session_id,
                 parent_id=node.id,
                 title=title,
                 goals=None,
                 content=None,
                 summary=None,
                 conclusion=None,
-                rank=current_children_count + i,
+                rank=(current_children_count + i),
                 level=(node.level or 1) + 1,
                 is_final=False,
             )
             local_db.add(child_orm)
-            local_db.flush()
+            local_db.flush()  # get id
 
-            # attach questions in this cluster to the new child
-            qids = [q_to_id[q.strip().lower()] for q in cluster if q.strip().lower() in q_to_id]
+            # attach questions for this cluster
+            qids = [q_to_id.get(q.strip().lower()) for q in cluster]
+            qids = [qid for qid in qids if qid]
             attach_questions_to_node(local_db, child_orm.id, qids)
-
-            # OPTIONAL: re-attach relevant chunks to child too
-            # A simple heuristic: any chunk whose text mentions >=1 key phrase from cluster
-            # You can refine with retrieval or keyword matching.
 
         local_db.commit()
     finally:
         if db is None:
+            local_db.close()
+
             local_db.close()
 
 

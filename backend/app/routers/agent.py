@@ -190,6 +190,9 @@ from app.utils.agent.expander import create_subnodes_from_clusters, deepen_node_
 
 @router.post("/agent/deepen/{section_id}")
 def deepen_section(session_id: str, section_id: int, top_k: int = 5):
+    from app.utils.agent.controller import get_novel_expansion_questions
+    from app.utils.agent.topics import group_similar
+
     db = SessionLocal()
     try:
         tree = ResearchTree.load_from_db(db, session_id)
@@ -201,38 +204,34 @@ def deepen_section(session_id: str, section_id: int, top_k: int = 5):
 
         node = tree.root_node.subnodes[section_id]
 
-        # 1) collect candidate items to form topics
-        q_objs = get_node_questions(db, node.id)
-        expansion_q = [q.text for q in q_objs if getattr(q, "source", "").lower() == "expansion"]
-        if not expansion_q:
-            return {"status": "skipped", "reason": "No expansion questions on this node — run /expand first"}
+        # 1) Take only *novel* expansion questions (vs local/global + child titles)
+        novel_expansion = get_novel_expansion_questions(
+            node, db, q_sim_thresh=0.80, title_sim_thresh=0.70
+        )
+        if len(novel_expansion) < 2:
+            return {"status": "skipped", "reason": "Not enough novel expansion questions"}
 
-        # 2) group into topics
-        clusters = group_similar(expansion_q, threshold=0.72)
+        # 2) Group into topic clusters
+        clusters = group_similar(novel_expansion, threshold=0.72)
+        big_enough = [c for c in clusters if len(c) >= 2]
+        if not big_enough:
+            return {"status": "skipped", "reason": "No clusters with at least 2 related questions"}
 
-        # 3) decide if we should deepen
-        existing_child_titles = [c.title for c in node.subnodes]
-        if not should_deepen_node(node, clusters, existing_child_titles,
-                                  min_items=2, title_sim_thresh=0.7, min_clusters=1):
-            return {"status": "skipped", "reason": "No sufficiently novel topic clusters to justify subnodes"}
-
-        # 4) create subnodes from topic clusters
+        # 3) Title heuristic for each cluster
         def title_from_cluster(cluster):
             cand = min(cluster, key=len)
             return cand.strip().rstrip("?.:;").capitalize()[:120]
 
-        create_subnodes_from_clusters(node, clusters, title_from_cluster, db=db)
-
-        # 5) (Optional) move relevant chunks down to the children
-        # A simple approach: for each child title, fetch chunks for the parent,
-        # attach chunks that keyword-match the child title/cluster terms to that child, and (optionally) leave them also on parent or detach from parent.
+        # 4) Create subnodes (persisted)
+        create_subnodes_from_clusters(node, big_enough, title_from_cluster, db=db)
 
         return {
             "status": "deepened",
-            "created_subnodes": [title_from_cluster(c) for c in clusters if len(c) >= 2]
+            "created_subnodes": [title_from_cluster(c) for c in big_enough]
         }
     finally:
         db.close()
+
 
 
 
