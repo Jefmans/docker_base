@@ -22,6 +22,16 @@ from app.db.db import SessionLocal, get_db
 from sqlalchemy.orm import Session
 from app.utils.agent.repo import upsert_questions, attach_questions_to_node, update_node_fields, get_node_chunks
 from app.utils.agent.router_utils import choose_best_node_for_question
+# app/routers/agent.py
+from app.utils.agent.repo import get_node_questions
+from app.db.models.question_orm import QuestionStatus
+from app.utils.agent.repo import get_node_chunks
+from app.models.research_tree import Chunk
+# in /agent/query
+from app.db.db import Session as SessionModel
+from app.utils.agent.repo import upsert_chunks, attach_chunks_to_node
+import hashlib
+
 
 
 
@@ -31,12 +41,6 @@ class AgentQueryRequest(BaseModel):
     query: str = "What is a black hole ?"
     top_k: int = 5
 
-
-
-# in /agent/query
-from app.db.db import Session as SessionModel
-from app.utils.agent.repo import upsert_chunks, attach_chunks_to_node
-import hashlib
 
 @router.post("/agent/query")
 async def start_query_session(request: AgentQueryRequest):
@@ -98,8 +102,6 @@ def generate_subquestions(session_id: str):
     return {"session_id": session_id, "questions": subq, "count": len(qids)}
 
 
-
-
 @router.post("/agent/outline")
 def create_outline(session_id: str):
     db = SessionLocal()
@@ -114,10 +116,6 @@ def create_outline(session_id: str):
         raise HTTPException(status_code=500, detail=f"Outline failed: {e}")
     finally:
         db.close()
-
-
-
-
 
 
 @router.post("/agent/section/{section_id}")
@@ -147,7 +145,6 @@ def write_section_by_id(session_id: str, section_id: int):
         }
     finally:
         db.close()
-
 
 
 
@@ -186,8 +183,10 @@ def expand_section(session_id: str, section_id: int, top_k: int = 5):
 
 
 # app/routers/agent.py
-from app.utils.agent.repo import get_node_questions
-from app.db.models.question_orm import QuestionStatus
+from app.utils.agent.repo import get_node_questions, get_node_chunks
+from app.utils.agent.topics import group_similar
+from app.utils.agent.controller import should_deepen_node
+from app.utils.agent.expander import create_subnodes_from_clusters, deepen_node_with_subquestions
 
 @router.post("/agent/deepen/{section_id}")
 def deepen_section(session_id: str, section_id: int, top_k: int = 5):
@@ -202,35 +201,38 @@ def deepen_section(session_id: str, section_id: int, top_k: int = 5):
 
         node = tree.root_node.subnodes[section_id]
 
-        # Pull questions for this node from DB
+        # 1) collect candidate items to form topics
         q_objs = get_node_questions(db, node.id)
-        # choose what to deepen on (e.g., only expansion/assigned)
-        candidate_q = [
-            q.text for q in q_objs
-            if q.status == QuestionStatus.ASSIGNED and q.source in ("expansion", "outline", "root_subq")
-        ]
+        expansion_q = [q.text for q in q_objs if getattr(q, "source", "").lower() == "expansion"]
+        if not expansion_q:
+            return {"status": "skipped", "reason": "No expansion questions on this node — run /expand first"}
 
-        if not candidate_q:
-            return {"status": "skipped", "reason": "No questions on this node — run /expand or attach questions first"}
+        # 2) group into topics
+        clusters = group_similar(expansion_q, threshold=0.72)
 
-        if should_deepen_node(node):
-            # Update deepen helper to accept questions (see next snippet)
-            deepen_node_with_subquestions(node, candidate_q, top_k=top_k)
-            # After deepening, reload chunks so you can return the delta if you want (Option A pattern)
-            from app.utils.agent.repo import get_node_chunks
-            orm_chunks = get_node_chunks(db, node.id)
-            from app.models.research_tree import Chunk
-            node.chunks = [Chunk(id=c.id, text=c.text, page=c.page, source=c.source) for c in orm_chunks]
-            return {
-                "status": "deepened",
-                "new_chunks": [c.text[:100] for c in node.chunks],
-                "used_questions": candidate_q,
-            }
-        else:
-            return {"status": "skipped", "reason": "Not enough useful questions to deepen"}
+        # 3) decide if we should deepen
+        existing_child_titles = [c.title for c in node.subnodes]
+        if not should_deepen_node(node, clusters, existing_child_titles,
+                                  min_items=2, title_sim_thresh=0.7, min_clusters=1):
+            return {"status": "skipped", "reason": "No sufficiently novel topic clusters to justify subnodes"}
+
+        # 4) create subnodes from topic clusters
+        def title_from_cluster(cluster):
+            cand = min(cluster, key=len)
+            return cand.strip().rstrip("?.:;").capitalize()[:120]
+
+        create_subnodes_from_clusters(node, clusters, title_from_cluster, db=db)
+
+        # 5) (Optional) move relevant chunks down to the children
+        # A simple approach: for each child title, fetch chunks for the parent,
+        # attach chunks that keyword-match the child title/cluster terms to that child, and (optionally) leave them also on parent or detach from parent.
+
+        return {
+            "status": "deepened",
+            "created_subnodes": [title_from_cluster(c) for c in clusters if len(c) >= 2]
+        }
     finally:
         db.close()
-
 
 
 
@@ -258,7 +260,6 @@ def complete_section(session_id: str, section_id: int):
     }
 
 
-
 @router.post("/agent/complete_tree")
 def complete_full_tree(session_id: str, top_k: int = 10):
     # tree = get_research_tree_db(session_id)
@@ -279,7 +280,6 @@ def complete_full_tree(session_id: str, top_k: int = 10):
     }
 
 
-
 @router.post("/agent/article/finalize")
 def finalize_article_route(session_id: str):
     # tree = get_research_tree_db(session_id)
@@ -295,7 +295,6 @@ def finalize_article_route(session_id: str):
         "title": tree.root_node.title or "Untitled Article",
         "article": article
     }
-
 
 
 @router.post("/agent/full_run")
@@ -352,8 +351,6 @@ def full_run(request: AgentQueryRequest):
         raise HTTPException(status_code=500, detail=str(e))
 
 
-
-
 @router.get("/agent/tree/{session_id}")
 def get_tree(session_id: str):
     # tree = get_research_tree_db(session_id)
@@ -363,8 +360,6 @@ def get_tree(session_id: str):
         raise HTTPException(status_code=404, detail="Session or tree not found")
 
     return JSONResponse(content=tree.model_dump_jsonable())
-
-
 
 
 @router.get("/agent/export/pdf_latex")
@@ -381,6 +376,7 @@ def export_pdf_via_latex(session_id: str):
         media_type="application/pdf",
         headers={"Content-Disposition": f"attachment; filename=article.pdf"}
     )
+
 
 @router.get("/agent/export/tree_content")
 def export_tree_content(session_id: str):

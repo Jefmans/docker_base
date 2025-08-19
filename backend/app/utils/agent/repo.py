@@ -105,6 +105,12 @@ def get_node_questions(db: Session, node_id: UUID) -> List[QuestionORM]:
            .filter(NodeQuestionORM.node_id == node_id))
     return q.all()
 
+def get_all_none_node_questions(db: Session, node_id: UUID) -> List[QuestionORM]:
+    q = (db.query(QuestionORM)
+           .join(NodeQuestionORM, NodeQuestionORM.question_id == QuestionORM.id)
+           .filter(NodeQuestionORM.node_id != node_id))
+    return q.all()
+
 def mark_questions_consumed(db: Session, question_ids: List[UUID]) -> None:
     if not question_ids:
         return

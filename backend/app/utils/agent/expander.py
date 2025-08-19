@@ -128,3 +128,65 @@ def export_tree_to_pdf(tree: ResearchTree, output_pdf="output.pdf"):
             return f.read()
         
 
+# app/utils/agent/expander.py (new function)
+from app.models.research_tree import ResearchNode
+from app.utils.agent.repo import attach_questions_to_node, attach_chunks_to_node
+from app.db.db import SessionLocal
+from app.db.models.research_node_orm import ResearchNodeORM
+
+def create_subnodes_from_clusters(node: ResearchNode, clusters_q: list[list[str]],
+                                  cluster_title_fn, db=None):
+    """
+    cluster_title_fn: callable(list[str]) -> str   # produce a title for each cluster
+    clusters_q are lists of question texts (you can also build clusters from chunks similarly)
+    """
+    local_db = db or SessionLocal()
+    try:
+        # get DB ids for these question texts
+        from sqlalchemy import func
+        from app.db.models.question_orm import QuestionORM
+        q_to_id = {q.text.lower(): q.id for q in local_db.query(QuestionORM).all()}  # or fetch only needed ones
+
+        # existing children count to assign rank
+        current_children_count = len(node.subnodes)
+
+        for i, cluster in enumerate(clusters_q, start=1):
+            if not cluster:
+                continue
+            title = cluster_title_fn(cluster)
+
+            # create child node
+            child_orm = ResearchNodeORM(
+                session_id=node.parent.id if node.parent else None,  # your save_to_db handles session_id; alternatively pass it in
+                parent_id=node.id,
+                title=title,
+                goals=None,
+                content=None,
+                summary=None,
+                conclusion=None,
+                rank=current_children_count + i,
+                level=(node.level or 1) + 1,
+                is_final=False,
+            )
+            local_db.add(child_orm)
+            local_db.flush()
+
+            # attach questions in this cluster to the new child
+            qids = [q_to_id[q.strip().lower()] for q in cluster if q.strip().lower() in q_to_id]
+            attach_questions_to_node(local_db, child_orm.id, qids)
+
+            # OPTIONAL: re-attach relevant chunks to child too
+            # A simple heuristic: any chunk whose text mentions >=1 key phrase from cluster
+            # You can refine with retrieval or keyword matching.
+
+        local_db.commit()
+    finally:
+        if db is None:
+            local_db.close()
+
+
+def title_from_cluster(cluster: list[str]) -> str:
+    # Heuristic: use the shortest question, strip punctuation, sentence-case it.
+    candidate = min(cluster, key=len)
+    t = candidate.strip().rstrip("?.:;").capitalize()
+    return t[:120]  # guard length
