@@ -20,7 +20,7 @@ from app.utils.agent.controller import should_deepen_node
 from app.utils.agent.expander import enrich_node_with_chunks_and_subquestions, deepen_node_with_subquestions, process_node_recursively, export_tree_to_pdf
 from app.db.db import SessionLocal, get_db
 from sqlalchemy.orm import Session
-from app.utils.agent.repo import upsert_questions, attach_questions_to_node, update_node_fields
+from app.utils.agent.repo import upsert_questions, attach_questions_to_node, update_node_fields, get_node_chunks
 from app.utils.agent.router_utils import choose_best_node_for_question
 
 
