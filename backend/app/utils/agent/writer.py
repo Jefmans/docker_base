@@ -3,7 +3,9 @@ from app.utils.vectorstore import get_vectorstore, get_caption_store
 from typing import List
 import logging
 from app.models.research_tree import ResearchNode
-
+from textwrap import dedent
+from app.utils.agent.repo import get_node_questions, get_node_chunks, mark_questions_consumed
+from app.db.db import SessionLocal
 
 
 logger = logging.getLogger(__name__)
@@ -23,9 +25,7 @@ def get_context_for_questions(questions: List[str], top_k: int = 5) -> str:
     return "\n\n".join(unique_texts[:20])  # limit
 
 
-# writer.py
-from app.utils.agent.repo import get_node_questions, get_node_chunks, mark_questions_consumed
-from app.db.db import SessionLocal
+
 
 def write_section(node: ResearchNode):
     db = SessionLocal()
@@ -37,23 +37,25 @@ def write_section(node: ResearchNode):
 
         goals = (node.goals or "").strip()
 
-        prompt = f"""
-        You are a scientific writer.
-        Write a detailed section titled "{node.title}".
+        # Precompute blocks so we don't put backslashes inside f-string { ... } expressions
+        goals_block = f"Goals for this section:\n{goals}\n\n" if goals else ""
+        questions_block = "\n".join(f"- {q}" for q in questions)
 
-        {'Goals for this section:\n' + goals if goals else ''}
+        prompt = dedent(f"""
+            You are a scientific writer.
+            Write a detailed section titled "{node.title}".
 
-        QUESTIONS TO ADDRESS:
-        {chr(10).join(f"- {q}" for q in questions)}
+            {goals_block}QUESTIONS TO ADDRESS:
+            {questions_block}
 
-        CONTEXT (verbatim excerpts, cite indirectly):
-        {context}
+            CONTEXT (verbatim excerpts, cite indirectly):
+            {context}
 
-        Constraints:
-        - Integrate answers to the questions.
-        - Be accurate and neutral.
-        - No extra headings; just the prose.
-        """
+            Constraints:
+            - Integrate answers to the questions.
+            - Be accurate and neutral.
+            - No extra headings; just the prose.
+        """).strip()
 
         node.content = llm.invoke(prompt).content.strip()
         node.mark_final()
