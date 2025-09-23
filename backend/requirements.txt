@@ -8,10 +8,9 @@ requests
 pymupdf
 
 # Python client for Elasticsearch — must satisfy langchain-elasticsearch
-elasticsearch==8.17.1
+elasticsearch>=8.13.1,<9
 
-# LangChain stack (modern API with vector_field support)
-langchain>=0.2.10
+# LangChain stack (matches the docs you linked)
+langchain>=0.3.25
 langchain-openai>=0.1.17
-langchain-elasticsearch>=0.3.2
-# Let core/community be resolved by langchain to avoid version skew
+langchain-elasticsearch==0.3.2
