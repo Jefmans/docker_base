@@ -5,7 +5,7 @@ from langchain_openai import OpenAIEmbeddings
 from app.models import ImageMetadata  # Adjust import as needed
 import os
 from urllib.parse import quote
-
+from app.utils.es import es, ensure_index, CAPTIONS, CAPTIONS_MAPPING
 
 # Initialize embedding model
 embedding_model = OpenAIEmbeddings(openai_api_key=os.getenv("OPENAI_API_KEY"))
@@ -13,10 +13,11 @@ embedding_model = OpenAIEmbeddings(openai_api_key=os.getenv("OPENAI_API_KEY"))
 # Initialize Elasticsearch client
 es = Elasticsearch(hosts=[os.getenv("ELASTICSEARCH_HOST", "http://elasticsearch:9200")])
 
-def embed_and_store_captions(records: List[ImageMetadata], index_name: str = "captions"):
+def embed_and_store_captions(records: List[ImageMetadata], index_name: str = CAPTIONS):
     """
     Embed caption texts from ImageMetadata list and index them in Elasticsearch.
     """
+    ensure_index(index_name, CAPTIONS_MAPPING)
     # Filter records that have a caption
     valid_records = [r for r in records if r.caption and r.caption.strip()]
     if not valid_records:
