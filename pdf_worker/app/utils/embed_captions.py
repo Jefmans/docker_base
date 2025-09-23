@@ -1,6 +1,7 @@
 from typing import List
 from elasticsearch import Elasticsearch, helpers
-from langchain.embeddings import OpenAIEmbeddings
+# from langchain.embeddings import OpenAIEmbeddings
+from langchain_openai import OpenAIEmbeddings
 from app.models import ImageMetadata  # Adjust import as needed
 import os
 from urllib.parse import quote

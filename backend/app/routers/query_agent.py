@@ -29,12 +29,16 @@ vectorstore = ElasticsearchStore(
     es_connection=es,
     index_name="pdf_chunks",
     embedding=embedding_model,
+    vector_field='vector',
+    text_field = 'text',    
 )
 
 caption_store = ElasticsearchStore(
     es_connection=es,
     index_name="captions",
     embedding=embedding_model,
+    vector_field='vector',
+    text_field = 'text',    
 )
 
 router = APIRouter()

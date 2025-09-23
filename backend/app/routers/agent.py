@@ -251,6 +251,9 @@ def complete_section(session_id: str, section_id: int):
     node.summary = write_summary(node)
     node.conclusion = write_conclusion(node)
     # save_research_tree_db(session_id, tree)
+    # persist into DB so the tree is source-of-truth
+    update_node_fields(db, node.id, summary=node.summary, conclusion=node.conclusion, is_final=True)
+    db.commit()    
 
     return {
         "status": "success",
@@ -260,41 +263,41 @@ def complete_section(session_id: str, section_id: int):
     }
 
 
-@router.post("/agent/complete_tree")
-def complete_full_tree(session_id: str, top_k: int = 10):
-    # tree = get_research_tree_db(session_id)
-    db = SessionLocal()
-    tree = ResearchTree.load_from_db(db, session_id)
-    if not tree:
-        raise HTTPException(status_code=404, detail="ResearchTree not found")
+# @router.post("/agent/complete_tree")
+# def complete_full_tree(session_id: str, top_k: int = 10):
+#     # tree = get_research_tree_db(session_id)
+#     db = SessionLocal()
+#     tree = ResearchTree.load_from_db(db, session_id)
+#     if not tree:
+#         raise HTTPException(status_code=404, detail="ResearchTree not found")
 
-    process_node_recursively(tree.root_node, tree, top_k=top_k)
-    # save_research_tree_db(session_id, tree)
+#     process_node_recursively(tree.root_node, tree, top_k=top_k)
+#     # save_research_tree_db(session_id, tree)
 
-    return {
-        "status": "complete",
-        "title": tree.root_node.title,
-        "outline_depth": len(tree.root_node.subnodes),
-        "summary": tree.root_node.summary,
-        "conclusion": tree.root_node.conclusion,
-    }
+#     return {
+#         "status": "complete",
+#         "title": tree.root_node.title,
+#         "outline_depth": len(tree.root_node.subnodes),
+#         "summary": tree.root_node.summary,
+#         "conclusion": tree.root_node.conclusion,
+#     }
 
 
-@router.post("/agent/article/finalize")
-def finalize_article_route(session_id: str):
-    # tree = get_research_tree_db(session_id)
-    db = SessionLocal()
-    tree = ResearchTree.load_from_db(db, session_id)    
-    if not tree:
-        raise HTTPException(status_code=404, detail="ResearchTree not found")
+# @router.post("/agent/article/finalize")
+# def finalize_article_route(session_id: str):
+#     # tree = get_research_tree_db(session_id)
+#     db = SessionLocal()
+#     tree = ResearchTree.load_from_db(db, session_id)    
+#     if not tree:
+#         raise HTTPException(status_code=404, detail="ResearchTree not found")
 
-    article = finalize_article_from_tree(tree)
+#     article = finalize_article_from_tree(tree)
 
-    return {
-        "session_id": session_id,
-        "title": tree.root_node.title or "Untitled Article",
-        "article": article
-    }
+#     return {
+#         "session_id": session_id,
+#         "title": tree.root_node.title or "Untitled Article",
+#         "article": article
+#     }
 
 
 @router.post("/agent/full_run")

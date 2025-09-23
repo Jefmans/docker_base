@@ -13,6 +13,8 @@ def get_vectorstore(index_name="pdf_chunks"):
         es_connection=es,
         index_name=index_name,
         embedding=embeddings,
+        vector_field="vector",
+        text_field="text",
     )
 
 def get_caption_store():

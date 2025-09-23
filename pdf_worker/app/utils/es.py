@@ -27,7 +27,9 @@ def save_chunks_to_es(filename: str, chunks: list):
     ensure_index()
 
     for chunk in chunks:
+        doc_id = f"{filename}_{chunk.chunk_size}_{chunk.chunk_index}"
         doc = {
+            "id": doc_id,
             "filename": filename,
             "chunk_size": chunk.chunk_size,
             "chunk_index": chunk.chunk_index,
@@ -35,5 +37,5 @@ def save_chunks_to_es(filename: str, chunks: list):
             "text": chunk.text,
             "vector": chunk.embedding
         }
-        doc_id = f"{filename}_{chunk.chunk_size}_{chunk.chunk_index}"
+        # doc_id = f"{filename}_{chunk.chunk_size}_{chunk.chunk_index}"
         es.index(index=INDEX_NAME, id=doc_id, document=doc)

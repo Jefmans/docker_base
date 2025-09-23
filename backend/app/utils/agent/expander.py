@@ -27,7 +27,10 @@ def enrich_node_with_chunks_and_subquestions(node: ResearchNode, tree: ResearchT
     chunk_dicts = []
     for doc in results:
         # inside enrich_node_with_chunks_and_subquestions(...)
-        chunk_id = stable_chunk_id(doc.page_content, doc.metadata.get("id"))
+        chunk_id = stable_chunk_id(
+            doc.page_content, 
+            doc.metadata.get("id") or doc.metadata.get("_id")  # fall back to ES _id if needed
+            )
         chunk_dicts.append({
             "id": chunk_id,
             "text": doc.page_content,
