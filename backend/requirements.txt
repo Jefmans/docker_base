@@ -6,7 +6,9 @@ minio
 python-multipart
 requests
 pymupdf
-elasticsearch==8.12.1
+
+# Python client for Elasticsearch — must satisfy langchain-elasticsearch
+elasticsearch==8.17.1
 
 # LangChain stack (modern API with vector_field support)
 langchain>=0.2.10
