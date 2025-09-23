@@ -8,8 +8,8 @@ requests
 pymupdf
 elasticsearch==8.12.1
 
-# LangChain stack (modern API with vector_field)
-langchain>=0.2.0
-langchain-openai>=0.1.7
+# LangChain stack (modern API with vector_field support)
+langchain>=0.2.10
+langchain-openai>=0.1.17
 langchain-elasticsearch>=0.3.2
-# TIP: omit explicit langchain-core/community pins to avoid version skew
+# Let core/community be resolved by langchain to avoid version skew
