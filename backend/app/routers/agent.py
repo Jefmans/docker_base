@@ -123,6 +123,7 @@ def create_outline(session_id: str):
     finally:
         db.close()
 
+
 @router.get("/agent/sections")
 def list_sections(session_id: str):
     db = SessionLocal()
@@ -148,7 +149,6 @@ def list_sections(session_id: str):
         }
     finally:
         db.close()
-
 
 
 @router.post("/agent/section/{section_id}")
@@ -212,6 +212,29 @@ def expand_section(session_id: str, section_id: int, top_k: int = 5):
             "new_chunks": [c.text[:100] for c in new_chunks],
             "total_chunks": len(node.chunks),
             "questions": node.questions
+        }
+    finally:
+        db.close()
+
+@router.get("/agent/deepen/debug/{section_id}")
+def deepen_debug(session_id: str, section_id: int):
+    from app.utils.agent.controller import get_novel_expansion_questions
+    from app.utils.agent.repo import get_node_questions
+    db = SessionLocal()
+    try:
+        repo = ResearchTreeRepository(db)
+        tree = repo.load(session_id)
+        node = get_top_level_section_or_400(tree, section_id)
+
+        q_objs = get_node_questions(db, node.id)
+        all_q = [{"text": q.text, "source": q.source, "status": q.status.value} for q in q_objs]
+
+        novel = get_novel_expansion_questions(node, db, q_sim_thresh=0.80, title_sim_thresh=0.70)
+        return {
+            "section": node.title,
+            "all_questions": all_q,
+            "novel_expansion_candidates": novel,
+            "child_titles": [c.title for c in node.subnodes],
         }
     finally:
         db.close()
