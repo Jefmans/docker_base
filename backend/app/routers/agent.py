@@ -19,6 +19,8 @@ from app.mappers.outline_to_tree import node_from_outline_section
 
 
 
+
+
 router = APIRouter()
 
 class AgentQueryRequest(BaseModel):
@@ -243,7 +245,7 @@ def deepen_debug(session_id: str, section_id: int):
 @router.post("/agent/deepen/{section_id}")
 def deepen_section(session_id: str, section_id: int, top_k: int = 5):
     from app.utils.agent.controller import get_novel_expansion_questions
-    from app.utils.agent.topics import group_similar
+    from app.utils.agent.topics import group_semantic
 
     db = SessionLocal()
     try:
@@ -263,11 +265,11 @@ def deepen_section(session_id: str, section_id: int, top_k: int = 5):
             return {"status": "skipped", "reason": "Not enough novel expansion questions"}
 
         # 2) Group into topic clusters
-        clusters = group_similar(novel_expansion, threshold=0.50)
-        print(clusters)
+        clusters = group_semantic(novel_expansion, tau=None)  # auto threshold
         big_enough = [c for c in clusters if len(c) >= 2]
         if not big_enough:
-            return {"status": "skipped", "reason": "No clusters with at least 2 related questions"}
+            # graceful fallback so it never "skips" without doing anything
+            big_enough = [[q] for q in novel_expansion]  # optional
 
         # 3) Title heuristic for each cluster
         def title_from_cluster(cluster):
@@ -279,6 +281,7 @@ def deepen_section(session_id: str, section_id: int, top_k: int = 5):
 
         return {
             "status": "deepened",
+            "clusters": [{"size": len(c), "sample": c[:2]} for c in clusters],
             "created_subnodes": [title_from_cluster(c) for c in big_enough]
         }
     finally:
