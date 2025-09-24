@@ -82,7 +82,7 @@ def process_node_recursively(node: ResearchNode, tree: ResearchTree, top_k: int 
 
     # 2) Decide whether to deepen using DB-based novelty
     if should_deepen_node(node):
-        # Use only the novel expansion questions
+        from app.db.db import SessionLocal
         db = SessionLocal()
         try:
             novel_expansion = get_novel_expansion_questions(
@@ -94,19 +94,15 @@ def process_node_recursively(node: ResearchNode, tree: ResearchTree, top_k: int 
         if novel_expansion:
             deepen_node_with_subquestions(node, novel_expansion, top_k=top_k)
 
-    # 3) Generate text for this node
+    # 3) Generate text for this node (CONTENT ONLY)
     write_section(node)
-    node.summary = write_summary(node)
-    node.conclusion = write_conclusion(node)
 
-    # 4) Persist generated fields
+    # 4) Persist generated fields (no summary/conclusion here)
     db = SessionLocal()
     try:
         update_node_fields(
             db, node.id,
             content=node.content,
-            summary=node.summary,
-            conclusion=node.conclusion,
             is_final=True
         )
         db.commit()
@@ -116,6 +112,7 @@ def process_node_recursively(node: ResearchNode, tree: ResearchTree, top_k: int 
     # 5) Recurse
     for subnode in node.subnodes:
         process_node_recursively(subnode, tree, top_k=top_k)
+
 
         
 def export_tree_to_pdf(tree: ResearchTree, output_pdf="output.pdf"):

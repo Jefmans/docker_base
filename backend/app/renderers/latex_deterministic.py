@@ -75,11 +75,7 @@ def _render_node(node: ResearchNode) -> str:
     if node.content:
         parts.append(_sanitize_body(_esc_text(node.content)) + "\n")
 
-    if node.summary:
-        parts.append(rf"\textbf{{Summary:}} {_sanitize_body(_esc_text(node.summary))}" + "\n")
-
-    if node.conclusion:
-        parts.append(rf"\textbf{{Conclusion:}} {_sanitize_body(_esc_text(node.conclusion))}" + "\n")
+    # no per-node summary/conclusion
 
     sl = _sources_line(node)
     if sl:
@@ -106,6 +102,25 @@ def to_latex_deterministic(tree: ResearchTree) -> str:
     \maketitle
     """).strip("\n") + "\n"
 
+    # Executive Summary (root only)
+    exec_summary = tree.root_node.summary or ""
+    exec_block = ""
+    if exec_summary.strip():
+        exec_block = "\\section*{Executive Summary}\n" + _sanitize_body(_esc_text(exec_summary)) + "\n\n"
+
+    # Optional Abstract from root.content
+    abstract_block = ""
+    if (tree.root_node.content or "").strip():
+        abstract_block = "\\section*{Abstract}\n" + _sanitize_body(_esc_text(tree.root_node.content)) + "\n\n"
+
     body = _render_node(tree.root_node)
+
+    # Overall Conclusion (root only)
+    overall = tree.root_node.conclusion or ""
+    concl_block = ""
+    if overall.strip():
+        concl_block = "\n\\section*{Overall Conclusion}\n" + _sanitize_body(_esc_text(overall)) + "\n"
+
     end = "\\end{document}\n"
-    return preamble + body + end
+    return preamble + exec_block + abstract_block + body + concl_block + end
+

@@ -22,12 +22,7 @@ def _sanitize(tex: str) -> str:
     return tex.strip()
 
 def _compact_tree(tree: ResearchTree, max_chunk_chars: int = 800) -> Dict[str, Any]:
-    """
-    Serialize the tree to a compact JSON the LLM can digest.
-    We keep structure + prose + (optionally) a few source hints per node.
-    """
-    def node_to_dict(n: ResearchNode) -> Dict[str, Any]:
-        # Keep main prose fields verbatim
+    def node_to_dict(n: ResearchNode, is_root: bool = False) -> Dict[str, Any]:
         out = {
             "title": n.title,
             "rank": n.rank,
@@ -35,27 +30,25 @@ def _compact_tree(tree: ResearchTree, max_chunk_chars: int = 800) -> Dict[str, A
             "display_rank": n.display_rank,
             "goals": (n.goals or ""),
             "content": (n.content or ""),
-            "summary": (n.summary or ""),
-            "conclusion": (n.conclusion or ""),
+            "summary": (n.summary or "") if is_root else "",        # root only
+            "conclusion": (n.conclusion or "") if is_root else "",  # root only
             "questions": list(n.questions or []),
-            # Include some (source, page) pairs as hints — the LLM can footnote them
             "sources": [],
             "subnodes": [],
         }
-        # If chunks are present in-memory, include a few source hints
-        # (If not, this just stays empty and that’s fine.)
         hints = []
         for c in (n.chunks or [])[:8]:
             hints.append({"source": c.source or "", "page": c.page})
         out["sources"] = hints
 
-        out["subnodes"] = [node_to_dict(sn) for sn in (n.subnodes or [])]
+        out["subnodes"] = [node_to_dict(sn, is_root=False) for sn in (n.subnodes or [])]
         return out
 
     return {
         "query": tree.query,
-        "root": node_to_dict(tree.root_node),
+        "root": node_to_dict(tree.root_node, is_root=True),
     }
+
 
 _PROMPT = r"""
 You are a LaTeX typesetter for scientific articles.
@@ -79,18 +72,18 @@ STRICT RULES:
 \geometry{margin=1in}
 
 - After \begin{document}:
-  - Title = root title (or fallback to the query if empty), then \maketitle
+  - Title = root title (or fallback to the query), then \maketitle
+  - If root.summary is present, render a \section*{Executive Summary} with that text.
+  - If root.content is present, render a \section*{Abstract} with that text.
   - Then render all sections from the tree, preserving hierarchy:
     level 1 -> \section, level 2 -> \subsection, level 3 -> \subsubsection, level >=4 -> \paragraph
-  - For each node, render (if present) in this order:
-    1) main prose from `content` (plain paragraphs)
-    2) a short bolded “Summary:” line if `summary` present
-    3) a short bolded “Conclusion:” line if `conclusion` present
-    4) optionally a footnotesize “Sources:” line constructed from (source, page) hints (e.g. “Sources: Book A, p.12; Paper B, p.7.”)
+  - For each non-root node, render ONLY its main prose from `content` (no per-node summary/conclusion).
+  - Optionally append a footnotesize “Sources:” line from (source, page) hints.
+  - If root.conclusion is present, render a \section*{Overall Conclusion} at the end.
+
 - DO NOT use figures, tables, bibliographies, \cite, \includegraphics, or custom macros.
-- Keep text as plain paragraphs (no itemize/enumerate).
-- Escape LaTeX special characters if needed in prose.
-- Never invent sources/pages—only use the given hints.
+- Escape LaTeX special characters in prose.
+- Never invent sources/pages — only use the given hints.
 
 Now generate the full LaTeX document.
 

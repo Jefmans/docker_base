@@ -8,70 +8,54 @@ class ArticleRenderer:
             text = f"{'#' * level} {node.title}\n\n"
             if node.content:
                 text += node.content.strip() + "\n\n"
-            if node.summary:
-                text += f"**Summary:** {node.summary.strip()}\n\n"
-            if node.conclusion:
-                text += f"**Conclusion:** {node.conclusion.strip()}\n\n"
+            # no per-node summary/conclusion
             for sn in node.subnodes:
                 text += walk(sn, level + 1)
             return text
 
-        return f"# Research Article\n\n## Query\n{tree.query}\n\n" + walk(tree.root_node)
+        parts = [f"# {tree.root_node.title or 'Research Article'}\n"]
+
+        # Executive Summary (root.summary) — if present
+        if tree.root_node.summary:
+            parts.append(f"**Executive Summary**\n\n{tree.root_node.summary.strip()}\n")
+
+        # Abstract from root.content if you use it as abstract, optional
+        if tree.root_node.content:
+            parts.append(f"**Abstract**\n\n{tree.root_node.content.strip()}\n")
+
+        # Sections
+        for sn in tree.root_node.subnodes:
+            parts.append(walk(sn, level=2))
+
+        # Overall Conclusion (root.conclusion) — if present
+        if tree.root_node.conclusion:
+            parts.append(f"## Overall Conclusion\n\n{tree.root_node.conclusion.strip()}\n")
+
+        return "\n".join(parts).strip()
 
     @staticmethod
     def to_html(tree: ResearchTree) -> str:
         def walk(node, level: int = 2) -> str:
-            text = f"<h{level}>{node.title}</h{level}>\n"
+            html = [f"<h{level}>{node.title}</h{level}>"]
             if node.content:
-                text += f"<p>{node.content.strip()}</p>\n"
-            if node.summary:
-                text += f"<p><strong>Summary:</strong> {node.summary.strip()}</p>\n"
-            if node.conclusion:
-                text += f"<p><strong>Conclusion:</strong> {node.conclusion.strip()}</p>\n"
+                html.append(f"<p>{node.content.strip()}</p>")
+            # no per-node summary/conclusion
             for sn in node.subnodes:
-                text += walk(sn, level + 1)
-            return text
+                html.append(walk(sn, level + 1))
+            return "\n".join(html)
 
-        return f"<h1>Research Article</h1>\n<h2>Query</h2><p>{tree.query}</p>\n" + walk(tree.root_node)
+        parts = [f"<h1>{tree.root_node.title or 'Research Article'}</h1>"]
 
-    @staticmethod
-    def to_latex(tree: ResearchTree) -> str:
-        def esc(s: str) -> str:
-            for k, v in {
-                "&": "\\&","%": "\\%","$": "\\$","#": "\\#","_": "\\_",
-                "{": "\\{","}": "\\}","~": "\\textasciitilde{}",
-                "^": "\\textasciicircum{}","\\": "\\textbackslash{}",
-            }.items():
-                s = s.replace(k, v)
-            return s
+        if tree.root_node.summary:
+            parts.append(f"<h2>Executive Summary</h2>\n<p>{tree.root_node.summary.strip()}</p>")
 
-        def walk(node, level: int = 1) -> str:
-            cmds = ["section", "subsection", "subsubsection", "paragraph"]
-            cmd = cmds[min(level, len(cmds) - 1)]
-            out = [f"\\{cmd}{{{esc(node.title)}}}\n"]
-            if node.content:
-                out.append(esc(node.content) + "\n")
-            if node.summary:
-                out.append(f"\\textbf{{Summary}}: {esc(node.summary)}\n")
-            if node.conclusion:
-                out.append(f"\\textbf{{Conclusion}}: {esc(node.conclusion)}\n")
+        if tree.root_node.content:
+            parts.append(f"<h2>Abstract</h2>\n<p>{tree.root_node.content.strip()}</p>")
 
-            # (optional) cite source+page lines from chunks
-            for ch in node.chunks:
-                if ch.source and ch.page is not None:
-                    out.append(f"\\textit{{[source: {esc(ch.source)}, page {ch.page}]}}\n")
+        for sn in tree.root_node.subnodes:
+            parts.append(walk(sn, level=2))
 
-            for sn in node.subnodes:
-                out.append(walk(sn, level + 1))
-            return "\n".join(out)
+        if tree.root_node.conclusion:
+            parts.append(f"<h2>Overall Conclusion</h2>\n<p>{tree.root_node.conclusion.strip()}</p>")
 
-        body = walk(tree.root_node)
-        return (
-            "\\documentclass{article}\n"
-            "\\usepackage[utf8]{inputenc}\n"
-            "\\usepackage{hyperref}\n"
-            "\\title{"+esc(tree.query)+"}\n"
-            "\\begin{document}\n\\maketitle\n"
-            + body +
-            "\n\\end{document}\n"
-        )
+        return "\n".join(parts)
