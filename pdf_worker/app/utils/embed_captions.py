@@ -1,5 +1,5 @@
 from typing import List
-from elasticsearch import Elasticsearch, helpers
+from elasticsearch import helpers
 # from langchain.embeddings import OpenAIEmbeddings
 from langchain_openai import OpenAIEmbeddings
 from app.models import ImageMetadata  # Adjust import as needed
@@ -8,10 +8,11 @@ from urllib.parse import quote
 from app.utils.es import es, ensure_index, CAPTIONS, CAPTIONS_MAPPING
 
 # Initialize embedding model
-embedding_model = OpenAIEmbeddings(openai_api_key=os.getenv("OPENAI_API_KEY"))
+embedding_model = OpenAIEmbeddings(
+            model="text-embedding-3-small",
+            openai_api_key=os.getenv("OPENAI_API_KEY")
+        )
 
-# Initialize Elasticsearch client
-es = Elasticsearch(hosts=[os.getenv("ELASTICSEARCH_HOST", "http://elasticsearch:9200")])
 
 def embed_and_store_captions(records: List[ImageMetadata], index_name: str = CAPTIONS):
     """

@@ -21,7 +21,6 @@ vectorstore = ElasticsearchStore(
     es_connection=es,
     index_name="pdf_chunks",  # Replace with your real index
     embedding=embedding_model,
-    # vector_field="embedding",  # ← this must match your ES field name
     vector_query_field='vector',
     query_field = 'text',
 )
@@ -30,7 +29,6 @@ caption_store = ElasticsearchStore(
     es_connection=es,
     index_name="captions",
     embedding=embedding_model,
-    # vector_field="embedding",
     vector_query_field='vector',
     query_field = 'text',    
 )
@@ -63,12 +61,11 @@ async def query(request: QueryRequest):
         return {
             "text_chunks": [
                 {
-                    # "text": r.page_content,
-                    # "score": score,
-                    # "pages": r.pages  # contains filename, pages, chunk_index etc.
-                    "r" : r
+                    "text": doc.page_content, 
+                    "score": score, 
+                    "metadata": dict(doc.metadata or {})
                 }
-                for r  in text_results
+            for (doc, score) in text_results
             ],
             "captions": [
                 {

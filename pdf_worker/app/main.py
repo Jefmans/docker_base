@@ -19,9 +19,17 @@ from app.utils.embedding import embed_chunks
 from app.models import TextChunkEmbedding
 from app.utils.es import save_chunks_to_es
 
+# app/main.py (pdf_worker)
+from app.utils.es import ensure_all_indices
 
 
 app = FastAPI(root_path="/pdfworker")
+
+@app.on_event("startup")
+def _startup():
+    ensure_all_indices()
+
+
 
 @app.post("/extract/{filename}")
 def extract_pdf(filename: str):
@@ -57,9 +65,9 @@ def extract_metadata(filename: str):
 def extract_images(filename: str):
     try:
         local_path = download_from_minio(filename)
-        # doc = fitz.open(local_path)
-        # page_range = list(range(len(doc)))  # Process all pages; change if needed
-        page_range=(38, 55, 56, 57)
+        import fitz
+        doc = fitz.open(local_path)
+        page_range = list(range(len(doc)))  # process all pages
         return process_images_and_captions(local_path, page_range, book_id=filename.split("_")[0])
     except Exception as e:
         raise HTTPException(status_code=500, detail=str(e))
