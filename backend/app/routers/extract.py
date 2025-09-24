@@ -10,14 +10,12 @@ MINIO_BUCKET = "uploads"
 # UNSTRUCTURED_API_URL = "http://95.216.215.141:8000/general/v0/general"
 UNSTRUCTURED_API_URL = "http://unstructured_custom:8000/parse/"
 
-
 minio_client = Minio(
     "minio:9000",
     access_key="minioadmin",
     secret_key="minioadmin123",
     secure=False
 )
-
 
 def extract_first_5_pages(pdf_bytes: bytes) -> io.BytesIO:
     original_doc = None

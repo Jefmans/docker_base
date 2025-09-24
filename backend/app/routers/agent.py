@@ -1,38 +1,20 @@
-from fastapi import APIRouter, Request, HTTPException, BackgroundTasks, Depends
+from fastapi import APIRouter, HTTPException
+from fastapi.responses import JSONResponse, Response
 from uuid import uuid4
 from pydantic import BaseModel
 from app.utils.agent.search_chunks import search_chunks
-from app.utils.agent.memory import save_session_chunks, get_session_chunks, save_section, save_research_tree
-from app.utils.agent.session_memory_db import (
-    save_session_chunks_db, get_session_chunks_db,
-    save_section_db, get_all_sections_db,
-    save_research_tree_db
-)
+from app.utils.agent.session_memory_db import save_research_tree_db
 from app.utils.agent.subquestions import generate_subquestions_from_chunks
 from app.utils.agent.outline import generate_outline_from_tree
 from app.utils.agent.writer import write_section, write_summary, write_conclusion
-import json
 from app.utils.agent.finalizer import finalize_article_from_tree
 from app.models.research_tree import ResearchTree, ResearchNode, Chunk
-from fastapi.responses import JSONResponse, Response
-from fastapi.encoders import jsonable_encoder
-from app.utils.agent.controller import should_deepen_node
-from app.utils.agent.expander import enrich_node_with_chunks_and_subquestions, deepen_node_with_subquestions, process_node_recursively, export_tree_to_pdf
-from app.db.db import SessionLocal, get_db
-from sqlalchemy.orm import Session
-from app.utils.agent.repo import upsert_questions, attach_questions_to_node, update_node_fields, get_node_chunks
+from app.utils.agent.expander import enrich_node_with_chunks_and_subquestions, export_tree_to_pdf, create_subnodes_from_clusters, deepen_node_with_subquestions
+from app.utils.agent.repo import upsert_questions, attach_questions_to_node, update_node_fields, get_node_chunks, upsert_chunks, attach_chunks_to_node, get_node_questions
 from app.utils.agent.router_utils import choose_best_node_for_question
-# app/routers/agent.py
-from app.utils.agent.repo import get_node_questions
-from app.db.models.question_orm import QuestionStatus
-from app.utils.agent.repo import get_node_chunks
-from app.models.research_tree import Chunk
-# in /agent/query
 from app.db.db import Session as SessionModel
-from app.utils.agent.repo import upsert_chunks, attach_chunks_to_node
 import hashlib
-
-
+from app.db.db import SessionLocal  # add this import
 
 
 router = APIRouter()
@@ -76,8 +58,6 @@ async def start_query_session(request: AgentQueryRequest):
 
     return {"status": "success", "session_id": session_id, "query": user_query,
             "preview_chunks": top_chunks[:3]}
-
-
 
 
 @router.post("/agent/subquestions")
@@ -147,7 +127,6 @@ def write_section_by_id(session_id: str, section_id: int):
         db.close()
 
 
-
 @router.post("/agent/expand/{section_id}")
 def expand_section(session_id: str, section_id: int, top_k: int = 5):
     # tree = get_research_tree_db(session_id)
@@ -181,12 +160,6 @@ def expand_section(session_id: str, section_id: int, top_k: int = 5):
         "questions": node.questions
     }
 
-
-# app/routers/agent.py
-from app.utils.agent.repo import get_node_questions, get_node_chunks
-from app.utils.agent.topics import group_similar
-from app.utils.agent.controller import should_deepen_node
-from app.utils.agent.expander import create_subnodes_from_clusters, deepen_node_with_subquestions
 
 @router.post("/agent/deepen/{section_id}")
 def deepen_section(session_id: str, section_id: int, top_k: int = 5):
@@ -232,8 +205,6 @@ def deepen_section(session_id: str, section_id: int, top_k: int = 5):
         }
     finally:
         db.close()
-
-
 
 
 @router.post("/agent/section/complete/{section_id}")
@@ -303,47 +274,75 @@ def complete_section(session_id: str, section_id: int):
 @router.post("/agent/full_run")
 def full_run(request: AgentQueryRequest):
     try:
-        # STEP 1: Generate session ID
+        # STEP 1: create session + persist root node in DB
         session_id = str(uuid4())
+        user_query = request.query
+        top_chunks = search_chunks(user_query, top_k=request.top_k)
 
-        # STEP 2: Search top-k chunks
-        top_chunks = search_chunks(request.query, top_k=request.top_k)
-        chunk_objs = [Chunk(id=str(i), text=c, page=None, source=None) for i, c in enumerate(top_chunks)]
+        # Build root ResearchTree
+        root_node = ResearchNode(title=request.query)
+        tree = ResearchTree(query=user_query, root_node=root_node)
 
-        # STEP 3: Build root ResearchTree
-        root_node = ResearchNode(title=request.query, chunks=chunk_objs)
-        tree = ResearchTree(query=request.query, root_node=root_node)
+        db = SessionLocal()
 
-        # STEP 4: Generate subquestions and outline
-        subq = generate_subquestions_from_chunks(top_chunks, request.query)
-        outline = generate_outline_from_tree(tree)  # if you want to base it on the current tree
+        try:
+            # create Session row
+            db.add(SessionModel(id=session_id, query=user_query, tree={}))
+            db.flush()
 
-        # STEP 5: Attach outline to tree
-        tree.root_node.title = outline.title or request.query
-        tree.root_node.questions = [q for s in outline.sections for q in s.questions]
-        tree.root_node.subnodes = [
-            ResearchTree.node_from_outline_section(s) for s in outline.sections
-        ]
+            # persist root node
+            tree.save_to_db(db, session_id)
 
-        # STEP 6: Write content per section
+            # upsert initial chunks and attach to root
+            chunk_dicts = [{
+                "id": hashlib.sha1(c.encode("utf-8")).hexdigest(),
+                "text": c,
+                "page": None,
+                "source": None
+            } for c in top_chunks]
+            upsert_chunks(db, chunk_dicts)
+            attach_chunks_to_node(db, tree.root_node.id, [c["id"] for c in chunk_dicts])
+            db.commit()
+        finally:
+            db.close()
+
+        # STEP 2: subquestions + outline
+        subq = generate_subquestions_from_chunks(top_chunks, user_query)
+        outline = generate_outline_from_tree(tree)
+
+        # Apply outline to DB-backed tree
+        db = SessionLocal()
+        try:
+            tree = ResearchTree.load_from_db(db, session_id)  # reload to ensure ORM ids
+            tree.apply_outline(outline, db, session_id)
+            db.commit()
+        finally:
+            db.close()
+
+        # STEP 3: write each top-level section and persist
         section_outputs = []
-        for i, node in enumerate(tree.root_node.subnodes):
-            write_section(node)
-            
-            section_outputs.append({
-                "heading": node.title,
-                "text": node.content
-            })
+        db = SessionLocal()
+        try:
+            tree = ResearchTree.load_from_db(db, session_id)
+            for node in tree.root_node.subnodes:
+                write_section(node)
+                update_node_fields(db, node.id, content=node.content, is_final=True)
+                section_outputs.append({"heading": node.title, "text": node.content})
+            db.commit()
+        finally:
+            db.close()
 
-        # STEP 7: Save full tree to DB
-        save_research_tree_db(session_id, tree)
-
-        # STEP 8: Finalize article from tree
-        article = finalize_article_from_tree(tree)
+        # STEP 4: final synthesis (in-memory from the latest tree)
+        db = SessionLocal()
+        try:
+            tree = ResearchTree.load_from_db(db, session_id)
+            article = finalize_article_from_tree(tree)
+        finally:
+            db.close()
 
         return {
             "session_id": session_id,
-            "title": tree.root_node.title,
+            "title": tree.root_node.title or user_query,
             "abstract": tree.root_node.content or "",
             "outline": [s.dict() for s in outline.sections],
             "sections": section_outputs,

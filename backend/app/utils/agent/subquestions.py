@@ -1,20 +1,12 @@
 from typing import List
-from langchain_openai import ChatOpenAI
-import json
-
 from pydantic import BaseModel
-from typing import List
+from langchain_openai import ChatOpenAI
+from langchain.output_parsers import PydanticOutputParser
+from langchain.prompts import PromptTemplate
 
 class SubquestionList(BaseModel):
     questions: List[str]
 
-
-
-from langchain.output_parsers import PydanticOutputParser
-from langchain.prompts import PromptTemplate
-from langchain.schema.runnable import RunnableMap
-from langchain_openai import ChatOpenAI
-import json
 
 def generate_subquestions_from_chunks(chunks: List[str], user_query: str, model_name: str = "gpt-4o") -> List[str]:
     llm = ChatOpenAI(model=model_name, temperature=0)

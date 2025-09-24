@@ -18,7 +18,6 @@ class Session(Base):
     tree = Column(JSONB, nullable=False)
     created_at = Column(TIMESTAMP, default=datetime.utcnow)
 
-
 class Document(Base):
     __tablename__ = "documents"
 
@@ -44,9 +43,6 @@ class ImageRecord(Base):
     xref = Column(Integer)
     filename = Column(String, unique=True)
     caption = Column(String)
-
-
-
 
 
 def get_db():

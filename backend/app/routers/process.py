@@ -52,10 +52,6 @@ def process_metadata(filename: str):
         raise HTTPException(status_code=500, detail=str(e))
 
 
-
-
-
-
 @router.post("/process/images/{filename}")
 def process_images_and_save(filename: str, db: Session = Depends(get_db)):
     try:

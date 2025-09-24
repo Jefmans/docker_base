@@ -2,7 +2,6 @@
 from __future__ import annotations
 from typing import List, Optional, Dict, Set, TYPE_CHECKING
 from pydantic import BaseModel, Field
-
 from uuid import uuid4
 from uuid import UUID
 from sqlalchemy.orm import Session
@@ -14,10 +13,6 @@ from app.db.models.node_chunk_orm import NodeChunkORM
 from app.db.models.chunk_orm import ChunkORM
 from app.db.db import Session as SessionModel
 
-
-# if TYPE_CHECKING:
-#     # Only for type checkers; not executed at runtime -> no circular import
-#     from app.models.outline_model import OutlineSection
 
 class Chunk(BaseModel):
     id: str
@@ -33,15 +28,12 @@ class ResearchNode(BaseModel):
     questions: List[str] = Field(default_factory=list)
     chunks: List[Chunk] = Field(default_factory=list)
     chunk_ids: Set[str] = Field(default_factory=set)
-
     content: Optional[str] = None
     summary: Optional[str] = None
     conclusion: Optional[str] = None
     is_final: bool = False
-
     parent: Optional["ResearchNode"] = None
     subnodes: List["ResearchNode"] = Field(default_factory=list)
-
     rank: Optional[int] = 0
     level: Optional[int] = 0
 
@@ -64,7 +56,6 @@ class ResearchNode(BaseModel):
             return f"{self.parent.title}"
         return None
 
-
     def add_subnode(self, node: "ResearchNode"):
         node.parent = self
         node.level = self.level + 1
@@ -79,7 +70,6 @@ class ResearchNode(BaseModel):
 
     def mark_final(self):
         self.is_final = True
-
 
     @classmethod
     def from_orm_model(cls, orm_node: ResearchNodeORM) -> "ResearchNode":
@@ -98,9 +88,6 @@ class ResearchNode(BaseModel):
             chunk_ids=set(),
             subnodes=[]
         )
-
-
-
 
     class Config:
         arbitrary_types_allowed = True
@@ -138,7 +125,6 @@ class ResearchTree(BaseModel):
     
     class Config:
         arbitrary_types_allowed = True
-
 
     def deduplicate_all(self):
         self._deduplicate_chunks()
@@ -188,9 +174,6 @@ class ResearchTree(BaseModel):
         )
         return node
 
-
-    
-
     def assign_rank_and_level(self):
         def _recurse(node: ResearchNode, parent: Optional[ResearchNode], level: int):
             node.parent = parent
@@ -204,11 +187,6 @@ class ResearchTree(BaseModel):
         self.root_node.level = 1
         _recurse(self.root_node, None, 1)
 
-
-
-
-
-
     def to_markdown(self) -> str:
         def walk(node: ResearchNode, level: int = 2) -> str:
             text = f"{'#' * level} {node.title}\n\n"
@@ -221,7 +199,7 @@ class ResearchTree(BaseModel):
             for sn in node.subnodes:
                 text += walk(sn, level + 1)
             return text
-
+        
         return f"# Research Article\n\n## Query\n{self.query}\n\n" + walk(self.root_node)
 
     def to_html(self) -> str:
@@ -426,8 +404,6 @@ class ResearchTree(BaseModel):
 
         _save_or_update_node(self.root_node)
         db.commit()
-
-
 
     @classmethod
     def load_from_db(cls, db: Session, session_id: str) -> "ResearchTree":

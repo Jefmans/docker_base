@@ -1,20 +1,18 @@
 from app.utils.agent.search_chunks import search_chunks
 from app.utils.agent.subquestions import generate_subquestions_from_chunks
 from app.models.research_tree import ResearchNode, ResearchTree, Chunk
-from app.utils.agent.controller import should_deepen_node
+from app.utils.agent.controller import should_deepen_node, get_novel_expansion_questions
 from app.utils.agent.writer import write_section, write_summary, write_conclusion
-
-
-from app.utils.agent.repo import upsert_chunks, attach_chunks_to_node, upsert_questions, attach_questions_to_node
+from app.utils.agent.repo import upsert_chunks, attach_chunks_to_node, upsert_questions, attach_questions_to_node, update_node_fields
 from app.db.db import SessionLocal  # add this import
-
-# utils/agent/expander.py (top)
 import hashlib
+from app.db.models.research_node_orm import ResearchNodeORM
+from sqlalchemy import select
+from app.db.models.question_orm import QuestionORM
+
 
 def stable_chunk_id(text: str, meta_id: str | None = None) -> str:
     return meta_id or hashlib.sha1(text.encode("utf-8")).hexdigest()
-
-
 
 
 def enrich_node_with_chunks_and_subquestions(node: ResearchNode, tree: ResearchTree, top_k: int = 10):
@@ -55,10 +53,6 @@ def enrich_node_with_chunks_and_subquestions(node: ResearchNode, tree: ResearchT
         db.close()
 
 
-
-
-from app.db.db import SessionLocal
-
 # app/utils/agent/expander.py
 def deepen_node_with_subquestions(node, questions: list[str], top_k=5):
     db = SessionLocal()
@@ -81,11 +75,6 @@ def deepen_node_with_subquestions(node, questions: list[str], top_k=5):
     finally:
         db.close()
 
-
-
-
-from app.utils.agent.controller import should_deepen_node, get_novel_expansion_questions
-from app.utils.agent.repo import update_node_fields
 
 def process_node_recursively(node: ResearchNode, tree: ResearchTree, top_k: int = 10):
     # 1) Expand the node (chunks + new expansion questions)
@@ -129,7 +118,6 @@ def process_node_recursively(node: ResearchNode, tree: ResearchTree, top_k: int 
         process_node_recursively(subnode, tree, top_k=top_k)
 
         
-
 def export_tree_to_pdf(tree: ResearchTree, output_pdf="output.pdf"):
     import subprocess
     import tempfile
@@ -144,12 +132,6 @@ def export_tree_to_pdf(tree: ResearchTree, output_pdf="output.pdf"):
         with open(pdf_path, "rb") as f:
             return f.read()
         
-from app.models.research_tree import ResearchNode
-from app.utils.agent.repo import attach_questions_to_node
-from app.db.db import SessionLocal
-from app.db.models.research_node_orm import ResearchNodeORM
-from sqlalchemy import select
-from app.db.models.question_orm import QuestionORM
 
 def create_subnodes_from_clusters(
     node: ResearchNode,
@@ -205,8 +187,6 @@ def create_subnodes_from_clusters(
         local_db.commit()
     finally:
         if db is None:
-            local_db.close()
-
             local_db.close()
 
 

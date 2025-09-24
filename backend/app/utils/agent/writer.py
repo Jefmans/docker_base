@@ -25,8 +25,6 @@ def get_context_for_questions(questions: List[str], top_k: int = 5) -> str:
     return "\n\n".join(unique_texts[:20])  # limit
 
 
-
-
 def write_section(node: ResearchNode):
     db = SessionLocal()
     try:
@@ -65,8 +63,6 @@ def write_section(node: ResearchNode):
     finally:
         db.close()
     return node
-
-
 
 
 def write_summary(node: ResearchNode) -> str:
