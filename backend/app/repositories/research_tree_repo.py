@@ -93,7 +93,9 @@ class ResearchTreeRepository:
         for orm in all_orm:
             if orm.parent_id:
                 parent = id_map[orm.parent_id]
-                parent.subnodes.append(id_map[orm.id])
+                child = id_map[orm.id]
+                child.parent = parent 
+                parent.subnodes.append(child)
 
         # hydrate questions
         q_rows = (

@@ -23,3 +23,5 @@ def get_top_level_section_or_400(tree: ResearchTree, section_id: int) -> Researc
             detail=f"Invalid section_id: {section_id}. Valid range: 0..{len(subs)-1}"
         )
     return subs[section_id]
+
+
