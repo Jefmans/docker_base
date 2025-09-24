@@ -147,8 +147,8 @@ def create_subnodes_from_clusters(
     try:
         # Resolve parent ORM to get the correct session_id
         parent_orm = local_db.execute(
-            select(ResearchNodeORM).where(ResearchNodeORM.id == node.id)
-        ).scalar_one_or_none()
+                select(ResearchNodeORM).where(ResearchNodeORM.id == node.id)
+            ).scalar_one_or_none()
         if not parent_orm:
             return
         session_id = parent_orm.session_id

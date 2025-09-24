@@ -109,3 +109,55 @@ def write_conclusion(node: ResearchNode) -> str:
         The conclusion should briefly reflect on the key findings or implications of the section.
     """
     return llm.invoke(prompt).content.strip()
+
+
+# writer.py
+from app.models.research_tree import ResearchTree
+from textwrap import dedent
+
+def write_executive_summary(tree: ResearchTree) -> str:
+    llm_local = ChatOpenAI(model="gpt-4o", temperature=0)
+    # Gather concise context from already written sections
+    sections = []
+    for n in tree.root_node.subnodes:
+        if n.content:
+            sections.append(f"- {n.title}: {n.content[:800]}")  # trim per section
+    context = "\n".join(sections[:12])  # cap a bit
+
+    prompt = dedent(f"""
+        You are a scientific writer. Draft a crisp Executive Summary (6–10 sentences)
+        of the article below. Be accurate, synthetic, and non-repetitive. Avoid headings.
+
+        ARTICLE TITLE:
+        {tree.root_node.title}
+
+        SECTION EXCERPTS:
+        {context}
+    """).strip()
+    return llm_local.invoke(prompt).content.strip()
+
+
+def write_overall_conclusion(tree: ResearchTree) -> str:
+    llm_local = ChatOpenAI(model="gpt-4o", temperature=0)
+    bullets = []
+    for n in tree.root_node.subnodes:
+        if n.summary:
+            bullets.append(f"- {n.title}: {n.summary}")
+        elif n.conclusion:
+            bullets.append(f"- {n.title}: {n.conclusion}")
+        elif n.content:
+            bullets.append(f"- {n.title}: {n.content[:400]}")
+    context = "\n".join(bullets[:14])
+
+    prompt = dedent(f"""
+        You are a scientific writer. Using the following findings, write an Overall Conclusion
+        (1–2 solid paragraphs) that synthesizes the main insights and limitations, and points to
+        future directions. Avoid new claims not supported by the findings.
+
+        TITLE:
+        {tree.root_node.title}
+
+        FINDINGS:
+        {context}
+    """).strip()
+    return llm_local.invoke(prompt).content.strip()

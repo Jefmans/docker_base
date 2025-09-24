@@ -25,3 +25,8 @@ def get_top_level_section_or_400(tree: ResearchTree, section_id: int) -> Researc
     return subs[section_id]
 
 
+def _filter_structural_sections(sections):
+    blocklist = {"conclusion", "overall conclusion", "executive summary", "summary", "abstract"}
+    def keep(s):
+        return s.heading.strip().lower() not in blocklist
+    return [s for s in sections if keep(s)]
