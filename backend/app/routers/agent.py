@@ -56,7 +56,6 @@ async def start_query_session(request: AgentQueryRequest):
             "preview_chunks": top_chunks[:3]}
 
 
-
 @router.post("/agent/subquestions")
 def generate_subquestions(session_id: str):
     db = SessionLocal()
@@ -67,7 +66,11 @@ def generate_subquestions(session_id: str):
         if not tree:
             raise HTTPException(status_code=404, detail="ResearchTree not found")
 
-        chunks = [c.text for c in tree.root_node.all_chunks()]  # if still JSON-based; or fetch via ORM for the root node
+        # Gather all chunk texts across the hydrated tree
+        chunks = [c.text for n in tree.all_nodes() for c in n.chunks]
+        # (optional) de-dup to keep the prompt lean
+        chunks = list(dict.fromkeys(chunks))
+        
         subq = generate_subquestions_from_chunks(chunks, tree.query)
 
         qids = upsert_questions(db, subq, source="root_subq")
