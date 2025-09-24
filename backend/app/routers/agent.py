@@ -70,7 +70,7 @@ def generate_subquestions(session_id: str):
         chunks = [c.text for n in tree.all_nodes() for c in n.chunks]
         # (optional) de-dup to keep the prompt lean
         chunks = list(dict.fromkeys(chunks))
-        
+
         subq = generate_subquestions_from_chunks(chunks, tree.query)
 
         qids = upsert_questions(db, subq, source="root_subq")
@@ -123,6 +123,30 @@ def create_outline(session_id: str):
     finally:
         db.close()
 
+@router.get("/agent/sections")
+def list_sections(session_id: str):
+    db = SessionLocal()
+    try:
+        repo = ResearchTreeRepository(db)
+        tree = repo.load(session_id)
+        subs = tree.root_node.subnodes or []
+        return {
+            "session_id": session_id,
+            "count": len(subs),
+            "sections": [
+                {
+                    "index": i,  # <-- use this with /agent/section/{section_id}
+                    "node_id": str(n.id),
+                    "display_rank": n.display_rank,  # e.g. "1.2"
+                    "title": n.title,
+                    "is_final": n.is_final,
+                    "level": n.level,
+                }
+                for i, n in enumerate(subs)
+            ],
+        }
+    finally:
+        db.close()
 
 
 @router.post("/agent/section/{section_id}")
