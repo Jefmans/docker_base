@@ -57,7 +57,7 @@ def _compact_tree(tree: ResearchTree, max_chunk_chars: int = 800) -> Dict[str, A
         "root": node_to_dict(tree.root_node),
     }
 
-_PROMPT = """\
+_PROMPT = r"""
 You are a LaTeX typesetter for scientific articles.
 
 You will receive a JSON-serialized research tree with:
@@ -71,23 +71,23 @@ Produce a single, compilable LaTeX document **including preamble** that renders 
 STRICT RULES:
 - Use this exact preamble (no extra packages, no changes):
 
-\\documentclass[11pt]{article}
-\\usepackage[utf8]{inputenc}
-\\usepackage[T1]{fontenc}
-\\usepackage{hyperref}
-\\usepackage{geometry}
-\\geometry{margin=1in}
+\documentclass[11pt]{article}
+\usepackage[utf8]{inputenc}
+\usepackage[T1]{fontenc}
+\usepackage{hyperref}
+\usepackage{geometry}
+\geometry{margin=1in}
 
-- After \\begin{document}:
-  - Title = root title (or fallback to the query if empty), then \\maketitle
+- After \begin{document}:
+  - Title = root title (or fallback to the query if empty), then \maketitle
   - Then render all sections from the tree, preserving hierarchy:
-    level 1 -> \\section, level 2 -> \\subsection, level 3 -> \\subsubsection, level >=4 -> \\paragraph
+    level 1 -> \section, level 2 -> \subsection, level 3 -> \subsubsection, level >=4 -> \paragraph
   - For each node, render (if present) in this order:
     1) main prose from `content` (plain paragraphs)
     2) a short bolded “Summary:” line if `summary` present
     3) a short bolded “Conclusion:” line if `conclusion` present
     4) optionally a footnotesize “Sources:” line constructed from (source, page) hints (e.g. “Sources: Book A, p.12; Paper B, p.7.”)
-- DO NOT use figures, tables, bibliographies, \\cite, \\includegraphics, or custom macros.
+- DO NOT use figures, tables, bibliographies, \cite, \includegraphics, or custom macros.
 - Keep text as plain paragraphs (no itemize/enumerate).
 - Escape LaTeX special characters if needed in prose.
 - Never invent sources/pages—only use the given hints.
@@ -95,17 +95,14 @@ STRICT RULES:
 Now generate the full LaTeX document.
 
 === RESEARCH TREE JSON ===
-{tree_json}
+<<<TREE_JSON>>>
 """
 
+
 def to_latex_via_llm(tree: ResearchTree) -> str:
-    # Prefer the in-memory tree; if nodes don’t carry chunks, it’s fine — we render prose/structure anyway.
     data = _compact_tree(tree)
-    # If the root title is empty, let the prompt tell the LLM to fallback to the query
     tree_json = json.dumps(data, ensure_ascii=False)
+    prompt = _PROMPT.replace("<<<TREE_JSON>>>", tree_json)
 
-    tex = _LLM.invoke(
-        dedent(_PROMPT).format(tree_json=tree_json)
-    ).content
-
+    tex = _LLM.invoke(prompt).content
     return _sanitize(tex)
