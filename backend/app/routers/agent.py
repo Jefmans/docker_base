@@ -263,7 +263,7 @@ def deepen_section(session_id: str, section_id: int, top_k: int = 5):
             return {"status": "skipped", "reason": "Not enough novel expansion questions"}
 
         # 2) Group into topic clusters
-        clusters = group_similar(novel_expansion, threshold=0.72)
+        clusters = group_similar(novel_expansion, threshold=0.60)
         print(clusters)
         big_enough = [c for c in clusters if len(c) >= 2]
         if not big_enough:
