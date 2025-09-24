@@ -117,7 +117,7 @@ def create_outline(session_id: str):
                 attach_questions_to_node(db, node.id, qids)
             for ssub, nsub in zip(section.subsections or [], node.subnodes or []):
                 attach_all(ssub, nsub)
-        for s, n in zip(outline.sections, tree.root_node.subnodes):
+        for s, n in zip(filtered_sections, tree.root_node.subnodes):
             attach_all(s, n)
 
         db.commit()
@@ -403,6 +403,11 @@ def full_run(request: AgentQueryRequest):
 
         outline = generate_outline_from_tree(tree_for_outline)
         filtered_sections = _filter_structural_sections(outline.sections)
+
+        if not filtered_sections:
+            from app.models.outline_model import OutlineSection
+            filtered_sections = [OutlineSection(heading="Main Discussion", goals=None, questions=[], subsections=[])]
+
 
         # Apply outline to DB-backed tree
         db = SessionLocal()
