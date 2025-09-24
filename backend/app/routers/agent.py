@@ -129,24 +129,26 @@ def list_sections(session_id: str):
     try:
         repo = ResearchTreeRepository(db)
         tree = repo.load(session_id)
-        subs = tree.root_node.subnodes or []
+        # include all nodes except root
+        nodes = [n for n in tree.all_nodes() if n.parent is not None]
         return {
             "session_id": session_id,
-            "count": len(subs),
+            "count": len(nodes),
             "sections": [
                 {
-                    "index": i,  # <-- use this with /agent/section/{section_id}
+                    "index": i,  # just a list index for convenience (not structural)
                     "node_id": str(n.id),
-                    "display_rank": n.display_rank,  # e.g. "1.2"
+                    "display_rank": n.display_rank,
                     "title": n.title,
-                    "is_final": n.is_final,
                     "level": n.level,
+                    "is_final": n.is_final,
                 }
-                for i, n in enumerate(subs)
+                for i, n in enumerate(nodes)
             ],
         }
     finally:
         db.close()
+
 
 
 @router.post("/agent/section/{section_id}")

@@ -31,8 +31,15 @@ class ResearchNode(BaseModel):
 
     @property
     def display_rank(self) -> str:
-        if not self.parent: return str(self.rank or 1)
+        # root -> show its own rank (usually 1), no prefix
+        if self.parent is None:
+            return str(self.rank or 1)
+        # top-level children -> don't include the root's "1" in the prefix
+        if self.parent.parent is None:
+            return str(self.rank or 1)
+        # deeper levels -> include parent's display rank
         return f"{self.parent.display_rank}.{self.rank or 1}"
+    
 
     @property
     def parent_title(self) -> Optional[str]:
