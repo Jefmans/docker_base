@@ -93,7 +93,7 @@ def to_latex_deterministic(tree: ResearchTree) -> str:
     \documentclass[14pt]{{extarticle}}
     \usepackage[utf8]{{inputenc}}
     \usepackage[T1]{{fontenc}}
-    \usepackage{{times}}
+    # \usepackage{{times}}
     \usepackage{{hyperref}}
     \usepackage{{geometry}}
     \geometry{{margin=1in}}
