@@ -69,12 +69,11 @@ async def query(request: QueryRequest):
             ],
             "captions": [
                 {
-                    # "caption": r.caption,
-                    # "score": score,
-                    # "metadata": r.metadata  # will include minio_path
-                    "r" : r
+                "text": doc.page_content,
+                "score": score,
+                "metadata": dict(doc.metadata or {})
                 }
-                for r  in caption_results
+            for (doc, score) in caption_results
             ]
         }
     except Exception as e:

@@ -129,10 +129,15 @@ def full_pdf_pipeline(filename: str):
     try:
         local_path = download_from_minio(filename)
         book_id = filename.split("_")[0]
-        process_pdf(local_path, book_id, filename)
+        stats = process_pdf(local_path, book_id, filename) or {}
         return {
-            "status": "✅ done",
-            "filename": filename
-        }
+            "status": "success",
+            "filename": filename,
+            **stats
+            }
     except Exception as e:
         raise HTTPException(status_code=500, detail=str(e))
+
+
+@app.get("/health")
+def health(): return {"status": "ok"}
