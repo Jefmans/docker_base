@@ -246,6 +246,7 @@ def deepen_debug(session_id: str, section_id: int):
 def deepen_section(session_id: str, section_id: int, top_k: int = 5):
     from app.utils.agent.controller import get_novel_expansion_questions
     from app.utils.agent.topics import group_semantic
+    from app.utils.agent.title_from_cluster import title_from_cluster
 
     db = SessionLocal()
     try:
@@ -270,11 +271,6 @@ def deepen_section(session_id: str, section_id: int, top_k: int = 5):
         if not big_enough:
             # graceful fallback so it never "skips" without doing anything
             big_enough = [[q] for q in novel_expansion]  # optional
-
-        # 3) Title heuristic for each cluster
-        def title_from_cluster(cluster):
-            cand = min(cluster, key=len)
-            return cand.strip().rstrip("?.:;").capitalize()[:120]
 
         # 4) Create subnodes (persisted)
         create_subnodes_from_clusters(node, big_enough, title_from_cluster, db=db)
