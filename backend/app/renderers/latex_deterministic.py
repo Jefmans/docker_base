@@ -90,12 +90,13 @@ def to_latex_deterministic(tree: ResearchTree) -> str:
     title = tree.root_node.title or tree.query
 
     preamble = dedent(rf"""
-    \documentclass[11pt]{{article}}
+    \documentclass[14pt]{{article}}
     \usepackage[utf8]{{inputenc}}
     \usepackage[T1]{{fontenc}}
     \usepackage{{hyperref}}
     \usepackage{{geometry}}
     \geometry{{margin=1in}}
+    \onehalfspacing 
     \title{{{_esc_text(title)}}}
     \date{{}}
     \begin{{document}}
