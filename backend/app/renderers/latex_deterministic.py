@@ -66,10 +66,15 @@ def _sources_line(node: ResearchNode, max_pairs: int = 8) -> str:
     return rf"\footnotesize\emph{{Sources: {items}.}}\normalsize"
 
 # --- Rendering ---
+# keep _heading_cmd, _esc_text, _sanitize_body, _sources_line as-is
 
-def _render_node(node: ResearchNode) -> str:
+def _render_node(node: ResearchNode, level: int | None = None) -> str:
+    # allow overriding level so we can start root's children at level=1
+    if level is None:
+        level = node.level or 1
+
     parts = []
-    cmd = _heading_cmd(node.level or 1)
+    cmd = _heading_cmd(level)
     parts.append(rf"\{cmd}{{{_esc_text(node.title or '')}}}" + "\n")
 
     if node.content:
@@ -82,7 +87,7 @@ def _render_node(node: ResearchNode) -> str:
         parts.append(sl + "\n")
 
     for child in (node.subnodes or []):
-        parts.append(_render_node(child))
+        parts.append(_render_node(child, level=level + 1))
 
     return "".join(parts)
 
@@ -90,39 +95,34 @@ def to_latex_deterministic(tree: ResearchTree) -> str:
     title = tree.root_node.title or tree.query
 
     preamble = dedent(rf"""
-    \documentclass[14pt]{{extarticle}}
+    \documentclass[11pt]{{article}}
     \usepackage[utf8]{{inputenc}}
     \usepackage[T1]{{fontenc}}
-    
     \usepackage{{hyperref}}
     \usepackage{{geometry}}
     \geometry{{margin=1in}}
-    \onehalfspacing 
     \title{{{_esc_text(title)}}}
     \date{{}}
     \begin{{document}}
     \maketitle
     """).strip("\n") + "\n"
 
-    # Executive Summary (root only)
-    exec_summary = tree.root_node.summary or ""
-    exec_block = ""
-    if exec_summary.strip():
-        exec_block = "\\section*{Executive Summary}\n" + _sanitize_body(_esc_text(exec_summary)) + "\n\n"
+    # Root-level blocks (optional):
+    exec_summary = (tree.root_node.summary or "").strip()
+    exec_block = f"\\section*{{Executive Summary}}\n{_sanitize_body(_esc_text(exec_summary))}\n\n" if exec_summary else ""
 
-    # Optional Abstract from root.content
-    abstract_block = ""
-    if (tree.root_node.content or "").strip():
-        abstract_block = "\\section*{Abstract}\n" + _sanitize_body(_esc_text(tree.root_node.content)) + "\n\n"
+    abstract = (tree.root_node.content or "").strip()
+    abstract_block = f"\\section*{{Abstract}}\n{_sanitize_body(_esc_text(abstract))}\n\n" if abstract else ""
 
-    body = _render_node(tree.root_node)
+    # IMPORTANT: do NOT render a section for the root itself.
+    # Start numbered sections at the root's children as level=1 (\section).
+    body_parts = []
+    for child in (tree.root_node.subnodes or []):
+        body_parts.append(_render_node(child, level=1))
+    body = "".join(body_parts)
 
-    # Overall Conclusion (root only)
-    overall = tree.root_node.conclusion or ""
-    concl_block = ""
-    if overall.strip():
-        concl_block = "\n\\section*{Overall Conclusion}\n" + _sanitize_body(_esc_text(overall)) + "\n"
+    overall = (tree.root_node.conclusion or "").strip()
+    concl_block = f"\n\\section*{{Overall Conclusion}}\n{_sanitize_body(_esc_text(overall))}\n" if overall else ""
 
     end = "\\end{document}\n"
     return preamble + exec_block + abstract_block + body + concl_block + end
-
