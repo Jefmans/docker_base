@@ -612,3 +612,28 @@ def export_pdf_via_latex_tree(session_id: str):
         media_type="application/pdf",
         headers={"Content-Disposition": "attachment; filename=article_tree_llm.pdf"}
     )
+
+
+@router.get("/agent/export/pdf_latex_deterministic")
+def export_pdf_via_latex_deterministic(session_id: str):
+    import subprocess, tempfile
+    from app.renderers.latex_deterministic import to_latex_deterministic
+    db = SessionLocal()
+    repo = ResearchTreeRepository(db)
+    tree = repo.load(session_id)
+    db.close()
+
+    latex = to_latex_deterministic(tree)
+
+    with tempfile.TemporaryDirectory() as tmp:
+        tex = f"{tmp}/doc.tex"
+        pdf = f"{tmp}/doc.pdf"
+        with open(tex, "w") as f: f.write(latex)
+        subprocess.run(["pdflatex", "-interaction=nonstopmode", tex], cwd=tmp, check=False)
+        with open(pdf, "rb") as f: pdf_bytes = f.read()
+
+    return Response(
+        content=pdf_bytes,
+        media_type="application/pdf",
+        headers={"Content-Disposition": "attachment; filename=article_deterministic.pdf"}
+    )
