@@ -7,16 +7,10 @@ class OutlineSection(BaseModel):
     goals: Optional[str] = None
 
     # REQUIRED and must be non-empty
-    questions: List[str]  # no default!
+    questions: List[str] = Field(default_factory=list)
 
     # Use default_factory to avoid shared mutable default
     subsections: List["OutlineSection"] = Field(default_factory=list)
-
-    @validator("questions")
-    def questions_non_empty(cls, v):
-        if not v:
-            raise ValueError("questions must be a non-empty list")
-        return v
 
     class Config:
         arbitrary_types_allowed = True
