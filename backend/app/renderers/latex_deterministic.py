@@ -90,9 +90,10 @@ def to_latex_deterministic(tree: ResearchTree) -> str:
     title = tree.root_node.title or tree.query
 
     preamble = dedent(rf"""
-    \documentclass[12pt]{{article}}
+    \documentclass[14pt]{{extarticle}}
     \usepackage[utf8]{{inputenc}}
     \usepackage[T1]{{fontenc}}
+    \usepackage{times}
     \usepackage{{hyperref}}
     \usepackage{{geometry}}
     \geometry{{margin=1in}}
