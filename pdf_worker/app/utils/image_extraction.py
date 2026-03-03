@@ -90,6 +90,7 @@ def process_images_and_captions(
     pdf_path: str,
     page_range: List[int],
     book_id: str = "book",
+    source_pdf: str | None = None,
     size_threshold: int = 200 * 200,
     dpi: int = 300,
     padding: int = 20,
@@ -153,7 +154,12 @@ def process_images_and_captions(
 
                     caption_text = caption_paragraphs[i]["text"] if i < caption_count else ""
                     metadata_list.append(ImageMetadata(
-                        book_id=book_id, source_pdf=pdf_path, page_number=page_index + 1, xref=info["xref"], filename=filename, caption=caption_text
+                        book_id=book_id,
+                        source_pdf=source_pdf or pdf_path,
+                        page_number=page_index + 1,
+                        xref=info["xref"],
+                        filename=filename,
+                        caption=caption_text,
                     ))
                     print(f"✅ Saved: {filename}")
 
@@ -195,7 +201,12 @@ def process_images_and_captions(
                 closest_caption = find_closest_caption_to_group((x0, y0, x1, y1), caption_paragraphs)
                 caption_text = closest_caption["text"] if closest_caption else ""
                 metadata_list.append(ImageMetadata(
-                        book_id=book_id, source_pdf=pdf_path, page_number=page_index + 1, xref=-1, filename=filename, caption=caption_text
+                        book_id=book_id,
+                        source_pdf=source_pdf or pdf_path,
+                        page_number=page_index + 1,
+                        xref=-1,
+                        filename=filename,
+                        caption=caption_text,
                     ))
                 
                 print(f"📷 Saved screenshot: {filename}")

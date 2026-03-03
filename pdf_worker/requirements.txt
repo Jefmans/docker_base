@@ -8,6 +8,8 @@ langchain-core
 langchain-openai
 pydantic
 Pillow
+python-dotenv
 rapidfuzz
-elasticsearch==8.12.1
+requests
+elasticsearch==8.13.4
 tiktoken

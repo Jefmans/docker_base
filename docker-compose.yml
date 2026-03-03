@@ -27,6 +27,8 @@ services:
     image: traefik/whoami
     container_name: whoami
     restart: always
+    profiles:
+      - admin
     networks:
       - internal_backend
     labels:
@@ -39,6 +41,8 @@ services:
     image: portainer/agent:latest
     container_name: portainer_agent
     restart: always
+    profiles:
+      - admin
     ports:
       - "9001:9001"  # Insecure if exposed to all IPs!
     networks:
@@ -73,6 +77,8 @@ services:
     image: dpage/pgadmin4:latest
     container_name: pgadmin
     restart: always
+    profiles:
+      - admin
     environment:
       PGADMIN_DEFAULT_EMAIL: admin@example.com
       PGADMIN_DEFAULT_PASSWORD: admin123
@@ -93,7 +99,7 @@ services:
 
 
   elasticsearch:
-    image: docker.elastic.co/elasticsearch/elasticsearch:9.0.0
+    image: docker.elastic.co/elasticsearch/elasticsearch:8.13.4
     container_name: elasticsearch
     restart: always
     environment:
@@ -122,9 +128,11 @@ services:
 
 
   kibana:
-    image: docker.elastic.co/kibana/kibana:9.0.0
+    image: docker.elastic.co/kibana/kibana:8.13.4
     container_name: kibana
     restart: always
+    profiles:
+      - admin
     environment:
       - ELASTICSEARCH_HOSTS=http://elasticsearch:9200
       - SERVER_BASEPATH=/kibana
@@ -190,6 +198,11 @@ services:
   pdf_worker:
     env_file:
       - .env
+    environment:
+      BACKEND_INTERNAL_URL: http://backend:8000
+      PDF_WORKER_NAME: pdf_worker
+      PDF_WORKER_POLL_INTERVAL_SECONDS: 5
+      PDF_WORKER_RUNNER_ENABLED: "true"
     build:
       context: ./pdf_worker
     container_name: pdf_worker
@@ -197,14 +210,9 @@ services:
     networks:
       - internal_backend
     depends_on:
+      - backend
+      - elasticsearch
       - minio
-    labels:
-      - "traefik.enable=true"
-      - "traefik.http.routers.pdfworker.rule=PathPrefix(`/pdfworker`)"
-      - "traefik.http.routers.pdfworker.entrypoints=web"
-      - "traefik.http.routers.pdfworker.middlewares=strip-worker"
-      - "traefik.http.middlewares.strip-worker.stripprefix.prefixes=/pdfworker"
-      - "traefik.http.services.pdfworker.loadbalancer.server.port=8000"
 
 
 

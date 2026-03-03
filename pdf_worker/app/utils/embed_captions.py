@@ -30,7 +30,7 @@ def embed_and_store_captions(records: List[ImageMetadata], index_name: str = CAP
 
     payloads = []
     for record, embedding in zip(valid_records, embeddings):
-        doc_id = f"{record.book_id}_{record.page_number}_{record.xref}"
+        doc_id = f"{record.book_id}_{record.page_number}_{record.xref}_{record.filename}"
         # filename = record.filename
 
         # minio_path = f"/minio/images/{quote(filename)}"  # or construct full URL if frontend needed
