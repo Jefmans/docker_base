@@ -7,22 +7,20 @@ from sqlalchemy.orm import Session
 from app.db.db import get_db
 from app.db.models.document_orm import Document
 from app.repositories.job_repo import create_processing_job
+from app.utils.minio_utils import ensure_bucket_exists, get_minio_client
 
 router = APIRouter()
 
 # Connect to MinIO
-minio_client = Minio(
-    "minio:9000",  # Container name + default port
-    access_key="minioadmin",
-    secret_key="minioadmin123",
-    secure=False
-)
+minio_client = get_minio_client()
 
 BUCKET_NAME = "uploads"
 
 @router.post("/upload/")
 async def upload_file(file: UploadFile = File(...), db: Session = Depends(get_db)):
     try:
+        ensure_bucket_exists(minio_client, BUCKET_NAME)
+
         # Generate a unique file name
         unique_filename = f"{uuid.uuid4()}_{file.filename}"
         content = await file.read()

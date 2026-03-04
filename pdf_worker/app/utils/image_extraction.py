@@ -9,15 +9,10 @@ from typing import List, Tuple, Dict
 
 
 from app.models import ImageMetadata
-from minio import Minio
+from app.utils.minio_utils import ensure_bucket_exists, get_minio_client
 
 # --- Setup MinIO ---
-minio_client = Minio(
-    "minio:9000",
-    access_key="minioadmin",
-    secret_key="minioadmin123",
-    secure=False
-)
+minio_client = get_minio_client()
 BUCKET_NAME = "images"
 
 
@@ -73,8 +68,9 @@ def upload_image_to_minio(image_bytes: bytes, filename: str, content_type: str =
     stream.seek(0)  # ✅ Ensure stream is at the beginning
 
     try:
+        ensure_bucket_exists(minio_client, BUCKET_NAME)
         minio_client.put_object(
-            bucket_name="images",  # make sure this bucket exists
+            bucket_name=BUCKET_NAME,
             object_name=filename,
             data=stream,
             length=len(image_bytes),

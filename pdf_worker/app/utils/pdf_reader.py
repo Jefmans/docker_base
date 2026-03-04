@@ -1,17 +1,12 @@
 from langchain_community.document_loaders import PyMuPDFLoader
 
-from minio import Minio
-import os
+from app.utils.minio_utils import ensure_bucket_exists, get_minio_client
 
 
 def read_pdf_from_minio(filename: str, bucket: str = "uploads") -> list:
     
-    minio_client = Minio(
-        "minio:9000",
-        access_key="minioadmin",
-        secret_key="minioadmin123",
-        secure=False
-    )
+    minio_client = get_minio_client()
+    ensure_bucket_exists(minio_client, bucket)
 
     # Download file from MinIO
     local_path = f"/tmp/{filename}"
@@ -25,12 +20,8 @@ def read_pdf_from_minio(filename: str, bucket: str = "uploads") -> list:
 
 def download_from_minio(filename: str, bucket: str = "uploads") -> list:
     
-    minio_client = Minio(
-        "minio:9000",
-        access_key="minioadmin",
-        secret_key="minioadmin123",
-        secure=False
-    )
+    minio_client = get_minio_client()
+    ensure_bucket_exists(minio_client, bucket)
 
     # Download file from MinIO
     local_path = f"/tmp/{filename}"
