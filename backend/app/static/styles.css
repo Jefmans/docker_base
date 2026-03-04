@@ -291,12 +291,14 @@ body {
 
 textarea,
 select,
+input[type="text"],
 input[type="file"] {
   font: inherit;
 }
 
 textarea,
-select {
+select,
+input[type="text"] {
   width: 100%;
   border: 1px solid var(--line);
   border-radius: var(--radius-sm);
@@ -308,6 +310,7 @@ select {
 
 textarea:focus,
 select:focus,
+input[type="text"]:focus,
 input[type="file"]:focus {
   outline: none;
   border-color: rgba(164, 55, 42, 0.5);
@@ -363,6 +366,30 @@ input[type="file"]:focus {
 .job-filename,
 .job-meta,
 .result-score {
+  color: var(--muted);
+}
+
+.job-subline {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 8px;
+  align-items: center;
+}
+
+.project-chip {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  padding: 7px 11px;
+  border-radius: 999px;
+  background: rgba(164, 55, 42, 0.1);
+  color: var(--accent);
+  font-size: 0.8rem;
+  font-weight: 700;
+}
+
+.project-chip.unassigned {
+  background: rgba(23, 32, 51, 0.08);
   color: var(--muted);
 }
 
@@ -446,6 +473,37 @@ input[type="file"]:focus {
 
 .mini-button:hover {
   background: rgba(23, 32, 51, 0.05);
+}
+
+.mini-button:disabled {
+  opacity: 0.5;
+  cursor: not-allowed;
+}
+
+.danger-button {
+  border-color: rgba(141, 36, 51, 0.24);
+  color: var(--danger);
+}
+
+.danger-button:hover {
+  background: rgba(141, 36, 51, 0.08);
+}
+
+.project-form {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) auto;
+  gap: 10px;
+  align-items: center;
+}
+
+.project-form .mini-button {
+  white-space: nowrap;
+}
+
+.library-meta {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 8px;
 }
 
 .job-stats {

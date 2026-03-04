@@ -33,14 +33,19 @@
         <section class="panel upload-panel">
           <div class="panel-head">
             <p class="eyebrow">Ingest</p>
-            <h2>Drop a PDF into the queue</h2>
+            <h2>Add a PDF to the library</h2>
           </div>
           <form id="upload-form" class="upload-form">
             <label for="pdf-file" class="dropzone" id="dropzone">
               <span class="drop-title">Choose a PDF or drag it here</span>
-              <span class="drop-meta">The backend stores the file in MinIO and opens a processing job immediately.</span>
+              <span class="drop-meta">The backend stores the file in MinIO, attaches it to a project if you choose one, and opens a processing job immediately.</span>
               <input id="pdf-file" name="file" type="file" accept="application/pdf" required>
             </label>
+            <label class="field">
+              <span>Project</span>
+              <input id="project-input" name="project_name" type="text" list="project-options" placeholder="Optional. Reuse an existing project or type a new one.">
+            </label>
+            <datalist id="project-options"></datalist>
             <div class="form-row">
               <button class="primary-button" type="submit" id="upload-button">Upload and queue</button>
               <p class="helper" id="upload-helper">No file selected.</p>
@@ -50,11 +55,11 @@
 
         <section class="panel jobs-panel">
           <div class="panel-head">
-            <p class="eyebrow">Pipeline</p>
-            <h2>Job monitor</h2>
+            <p class="eyebrow">Library</p>
+            <h2>Uploaded PDFs</h2>
           </div>
           <div id="jobs-empty" class="empty-state">
-            No jobs yet. Upload a PDF to create the first ingest run.
+            No PDFs yet. Upload the first document to create the library.
           </div>
           <div id="jobs-list" class="jobs-list"></div>
         </section>
@@ -69,7 +74,7 @@
           <form id="search-form" class="search-form">
             <label class="field">
               <span>Question</span>
-              <textarea id="query-input" rows="4" placeholder="Ask about the uploaded material, a figure caption, or a topic spread across multiple PDFs." required></textarea>
+              <textarea id="query-input" rows="4" placeholder="Ask about one PDF, a whole project, or everything in the library." required></textarea>
             </label>
             <div class="search-grid">
               <label class="field">
@@ -91,7 +96,7 @@
             <button class="primary-button" type="submit" id="search-button">Run search</button>
           </form>
           <p class="helper search-helper">
-            Search runs against the current Elasticsearch indexes. Scope filtering is applied in the browser using the result metadata.
+            Search runs against Elasticsearch with server-side scoping: one PDF, one project, or the whole indexed library.
           </p>
         </section>
 

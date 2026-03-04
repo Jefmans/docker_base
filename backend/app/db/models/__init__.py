@@ -4,6 +4,7 @@ from app.db.models.image_record_orm import ImageRecord
 from app.db.models.node_chunk_orm import NodeChunkORM
 from app.db.models.node_question_orm import NodeQuestionORM
 from app.db.models.processing_job_orm import ProcessingJob
+from app.db.models.project_orm import Project
 from app.db.models.question_orm import QuestionORM
 from app.db.models.research_node_orm import ResearchNodeORM
 
@@ -14,6 +15,7 @@ __all__ = [
     "NodeChunkORM",
     "NodeQuestionORM",
     "ProcessingJob",
+    "Project",
     "QuestionORM",
     "ResearchNodeORM",
 ]

@@ -3,7 +3,7 @@ from pathlib import Path
 from fastapi import FastAPI
 from fastapi.staticfiles import StaticFiles
 
-from app.routers import agent, extract, health, jobs, process, query, ui, upload
+from app.routers import agent, extract, health, jobs, library, process, query, ui, upload
 # from app.db.models import research_node_orm, question_orm, node_question_orm, chunk_orm, node_chunk_orm
 
 
@@ -24,6 +24,7 @@ app.mount(
 # Optional: If you're mounting routes, align them too
 app.include_router(ui.router)
 app.include_router(health.router)
+app.include_router(library.router)
 app.include_router(upload.router)
 app.include_router(extract.router)
 app.include_router(process.router)

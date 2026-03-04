@@ -1,4 +1,4 @@
-from fastapi import APIRouter, UploadFile, File, HTTPException, Depends
+from fastapi import APIRouter, UploadFile, File, Form, HTTPException, Depends
 from minio import Minio
 import uuid
 import io
@@ -7,6 +7,7 @@ from sqlalchemy.orm import Session
 from app.db.db import get_db
 from app.db.models.document_orm import Document
 from app.repositories.job_repo import create_processing_job
+from app.repositories.project_repo import get_or_create_project, normalize_project_name
 from app.utils.minio_utils import ensure_bucket_exists, get_minio_client
 
 router = APIRouter()
@@ -17,7 +18,11 @@ minio_client = get_minio_client()
 BUCKET_NAME = "uploads"
 
 @router.post("/upload/")
-async def upload_file(file: UploadFile = File(...), db: Session = Depends(get_db)):
+async def upload_file(
+    file: UploadFile = File(...),
+    project_name: str | None = Form(default=None),
+    db: Session = Depends(get_db),
+):
     try:
         ensure_bucket_exists(minio_client, BUCKET_NAME)
 
@@ -36,7 +41,15 @@ async def upload_file(file: UploadFile = File(...), db: Session = Depends(get_db
             content_type=file.content_type,
         )
 
-        document = Document(filename=unique_filename)
+        project = None
+        normalized_project_name = normalize_project_name(project_name)
+        if normalized_project_name:
+            project, _created = get_or_create_project(db, normalized_project_name)
+
+        document = Document(
+            filename=unique_filename,
+            project_id=project.id if project else None,
+        )
         db.add(document)
         db.flush()
 
@@ -51,6 +64,9 @@ async def upload_file(file: UploadFile = File(...), db: Session = Depends(get_db
             "document_id": str(document.id),
             "job_id": str(job.id),
             "filename": unique_filename,
+            "display_name": file.filename,
+            "project_id": str(project.id) if project else None,
+            "project_name": project.name if project else None,
             "status": job.status.value,
         }
 

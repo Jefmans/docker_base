@@ -4,6 +4,8 @@ import os
 from elasticsearch import Elasticsearch
 from langchain_openai import OpenAIEmbeddings
 
+from app.utils.search_index import build_filter_clauses
+
 
 @dataclass
 class StoredDocument:
@@ -17,25 +19,41 @@ class SimpleElasticsearchVectorStore:
         self.vector_query_field = vector_query_field
         self.query_field = query_field
         self.es = Elasticsearch("http://elasticsearch:9200")
-        self.embeddings = OpenAIEmbeddings(
-            model="text-embedding-3-small",
-            openai_api_key=os.getenv("OPENAI_API_KEY"),
-        )
+        self._embeddings = None
+
+    @property
+    def embeddings(self) -> OpenAIEmbeddings:
+        if self._embeddings is None:
+            self._embeddings = OpenAIEmbeddings(
+                model="text-embedding-3-small",
+                openai_api_key=os.getenv("OPENAI_API_KEY"),
+            )
+        return self._embeddings
 
     def similarity_search(self, query: str, k: int = 5) -> list[StoredDocument]:
         return [doc for doc, _score in self.similarity_search_with_score(query=query, k=k)]
 
-    def similarity_search_with_score(self, query: str, k: int = 5) -> list[tuple[StoredDocument, float]]:
+    def similarity_search_with_score(
+        self,
+        query: str,
+        k: int = 5,
+        *,
+        filters: dict[str, object] | None = None,
+    ) -> list[tuple[StoredDocument, float]]:
         vector = self.embeddings.embed_query(query)
+        knn = {
+            "field": self.vector_query_field,
+            "query_vector": vector,
+            "k": k,
+            "num_candidates": max(25, k * 5),
+        }
+        clauses = build_filter_clauses(filters)
+        if clauses:
+            knn["filter"] = {"bool": {"filter": clauses}}
         response = self.es.search(
             index=self.index_name,
             size=k,
-            knn={
-                "field": self.vector_query_field,
-                "query_vector": vector,
-                "k": k,
-                "num_candidates": max(25, k * 5),
-            },
+            knn=knn,
             source=True,
         )
 
