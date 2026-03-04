@@ -11,5 +11,5 @@ Pillow
 python-dotenv
 rapidfuzz
 requests
-elasticsearch==8.13.4
+elasticsearch==8.13.1
 tiktoken
