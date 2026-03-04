@@ -132,7 +132,6 @@ def process_node_recursively(node: ResearchNode, tree: ResearchTree, top_k: int 
         node,
         min_novel=tree.plan.min_novel_questions_to_deepen,
     ):
-        from app.db.db import SessionLocal
         db = SessionLocal()
         try:
             novel_expansion = get_novel_expansion_questions(
