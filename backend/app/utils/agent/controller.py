@@ -108,29 +108,29 @@ def build_node_execution_plan(
     base_should_attempt_depth = node_should_attempt_depth(plan, node)
 
     if evidence.evidence_density == "rich":
-        retrieval_top_k = _clamp(base_retrieval_top_k + 2, 4, 18)
-        context_limit = _clamp(base_context_limit + 2, 6, 24)
-        subquestion_target = _clamp(base_subquestion_target + 1, 2, 8)
-        min_novel = _clamp(plan.min_novel_questions_to_deepen + 1, 2, 5)
-        length_hint = "3-4 evidence-rich paragraphs"
+        retrieval_top_k = _clamp(base_retrieval_top_k + 2, 3, 24)
+        context_limit = _clamp(base_context_limit + 2, 4, 26)
+        subquestion_target = _clamp(base_subquestion_target + 1, 1, 9)
+        min_novel = _clamp(max(1, plan.min_novel_questions_to_deepen), 1, 6)
+        length_hint = "3-5 evidence-rich paragraphs"
         should_attempt_depth = base_should_attempt_depth and evidence.has_meaningful_support
     elif evidence.evidence_density == "moderate":
         retrieval_top_k = base_retrieval_top_k
         context_limit = base_context_limit
         subquestion_target = base_subquestion_target
-        min_novel = plan.min_novel_questions_to_deepen
+        min_novel = max(1, plan.min_novel_questions_to_deepen)
         length_hint = plan.section_length_hint
         should_attempt_depth = base_should_attempt_depth and evidence.has_meaningful_support
     else:
-        retrieval_top_k = _clamp(base_retrieval_top_k - 1, 4, 16)
-        context_limit = _clamp(base_context_limit - 2, 4, 20)
+        retrieval_top_k = _clamp(base_retrieval_top_k - 1, 3, 20)
+        context_limit = _clamp(base_context_limit - 2, 3, 22)
         subquestion_target = _clamp(base_subquestion_target - 1, 1, 6)
-        min_novel = max(plan.min_novel_questions_to_deepen, 2)
+        min_novel = 1
         length_hint = "1-2 short evidence-grounded paragraphs"
         should_attempt_depth = (
             base_should_attempt_depth
             and evidence.has_meaningful_support
-            and evidence.unique_chunk_count >= 4
+            and evidence.unique_chunk_count >= 3
         )
 
     return NodeExecutionPlan(
@@ -207,7 +207,7 @@ def evaluate_node_refinement(
     *,
     evidence: NodeEvidenceProfile | None = None,
     similarity_threshold: float = 0.80,
-    min_novel: int = 2,
+    min_novel: int = 1,
     title_similarity_threshold: float = 0.70,
 ) -> NodeRefinementDecision:
     if evidence is not None:

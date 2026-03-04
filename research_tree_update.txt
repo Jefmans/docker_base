@@ -200,6 +200,20 @@ WHAT HAS BEEN FIXED ALREADY
     - This moves deepening behavior from a mostly manual route toward the
       intended local refinement loop
 
+11. Plan budgets are now less rigid and more candidate-vs-context aware
+    - File:
+      backend/app/utils/agent/planning.py
+    - root_top_k now behaves as a broader candidate-retrieval budget
+    - root_context_chunks now behaves as a filtered evidence budget for LLM steps
+    - simple single-document queries can now legitimately use smaller question/section plans
+
+12. Node enrichment now performs a second retrieval pass from generated expansion questions
+    - File:
+      backend/app/utils/agent/expander.py
+    - Each node now follows a closer local loop:
+      retrieve -> ask follow-up questions -> retrieve again -> write/deepen decision
+    - This reduces reliance on one single retrieval pass per node
+
 
 CURRENT WEAKNESSES
 ------------------
@@ -481,3 +495,6 @@ CHANGE LOG
 - Added the first evidence-aware controller slice so node budgets and deepening gates now react to local chunk density
 - Added evidence-driven root plan refinement after initial retrieval
 - Enabled automatic structural deepening (clustered novel questions -> new child subnodes) in recursive processing
+- Tuned plan heuristics to widen root candidate retrieval and separate candidate budget from LLM context budget
+- Relaxed hard minimum subquestion counts so sparse evidence can produce fewer questions
+- Added per-node follow-up retrieval from generated expansion questions before section writing/deepening decisions

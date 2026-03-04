@@ -153,10 +153,11 @@ def _run_full_agent_pipeline(
             len(scope.filenames),
         )
         logger.info(
-            "[answer-run %s] Plan: root_top_k=%s root_subquestion_target=%s outline_target_sections=%s "
+            "[answer-run %s] Plan: root_top_k=%s root_context_chunks=%s root_subquestion_target=%s outline_target_sections=%s "
             "section_top_k=%s section_context_chunks=%s desired_depth=%s evidence_profile=%s",
             active_session_id,
             plan.root_top_k,
+            plan.root_context_chunks,
             plan.root_subquestion_target,
             plan.outline_target_sections,
             plan.section_top_k,
@@ -184,9 +185,11 @@ def _run_full_agent_pipeline(
         chunk_dicts = _build_initial_chunk_dicts(top_chunks)
         tree.plan = refine_research_plan_from_initial_chunks(tree.plan, chunk_dicts)
         logger.info(
-            "[answer-run %s] Refined plan from evidence: root_subquestion_target=%s outline_target_sections=%s "
+            "[answer-run %s] Refined plan from evidence: root_context_chunks=%s root_subquestion_target=%s "
+            "outline_target_sections=%s "
             "section_top_k=%s section_subquestion_target=%s evidence_profile=%s",
             active_session_id,
+            tree.plan.root_context_chunks,
             tree.plan.root_subquestion_target,
             tree.plan.outline_target_sections,
             tree.plan.section_top_k,

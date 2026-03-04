@@ -22,18 +22,18 @@ class ResearchScope(BaseModel):
 
 class ResearchPlan(BaseModel):
     query_complexity: int = 1
-    root_top_k: int = 5
-    root_context_chunks: int = 10
-    root_subquestion_target: int = 5
-    outline_target_sections: int = 4
+    root_top_k: int = 18
+    root_context_chunks: int = 9
+    root_subquestion_target: int = 2
+    outline_target_sections: int = 2
     outline_max_subsections: int = 2
-    section_top_k: int = 8
-    section_context_chunks: int = 12
-    section_subquestion_target: int = 4
-    summary_context_sections: int = 8
+    section_top_k: int = 12
+    section_context_chunks: int = 9
+    section_subquestion_target: int = 2
+    summary_context_sections: int = 4
     desired_depth: int = 2
-    min_novel_questions_to_deepen: int = 2
-    section_length_hint: str = "2-4 compact paragraphs"
+    min_novel_questions_to_deepen: int = 1
+    section_length_hint: str = "2-3 focused paragraphs"
     evidence_profile: str = "narrow"
 
 class Chunk(BaseModel):

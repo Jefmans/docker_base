@@ -21,8 +21,15 @@ def generate_outline_from_tree(tree: ResearchTree) -> Outline:
     subquestions = subquestions[: tree.plan.root_subquestion_target]
 
     target_sections = tree.plan.outline_target_sections
-    min_sections = max(3, target_sections - 1)
-    max_sections = target_sections + 1
+    if tree.plan.evidence_profile in {"narrow", "sparse"}:
+        min_sections = max(1, target_sections - 2)
+        max_sections = target_sections + 1
+    elif tree.plan.evidence_profile == "moderate":
+        min_sections = max(1, target_sections - 1)
+        max_sections = target_sections + 2
+    else:
+        min_sections = max(2, target_sections - 1)
+        max_sections = target_sections + 3
 
     prompt = PromptTemplate(
         template="""
@@ -35,6 +42,7 @@ def generate_outline_from_tree(tree: ResearchTree) -> Outline:
             Do not force the same size every time.
             Use fewer sections if the evidence is narrow.
             Use more only if the evidence truly supports it.
+            A single top-level section is allowed when evidence is sparse or highly focused.
             Keep each section to at most {max_subsections} subsections.
             Treat idiomatic, literary, dialectal, archaic, or figurative expressions carefully.
             Do not build sections around an unverified literal interpretation.

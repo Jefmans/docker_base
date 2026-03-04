@@ -10,6 +10,22 @@ class SubquestionList(BaseModel):
     questions: List[str]
 
 
+def _compute_min_subquestion_count(
+    target_count: int,
+    *,
+    available_chunks: int,
+    context_chunk_limit: int,
+) -> int:
+    effective_context = min(max(available_chunks, 0), max(context_chunk_limit, 0))
+    if target_count <= 1:
+        return 1
+    if effective_context <= 2:
+        return 1
+    if effective_context <= 4:
+        return max(1, min(target_count - 1, 2))
+    return max(2, min(target_count - 1, max(3, target_count // 2)))
+
+
 def generate_subquestions_from_chunks(
     chunks: List[str],
     user_query: str,
@@ -19,9 +35,14 @@ def generate_subquestions_from_chunks(
     context_chunk_limit: int = 12,
 ) -> List[str]:
     llm = ChatOpenAI(model=model_name, temperature=0)
+    capped_target_count = max(1, target_count)
     context = "\n\n".join(chunks[:context_chunk_limit])
     parser = PydanticOutputParser(pydantic_object=SubquestionList)
-    min_count = max(3, min(target_count - 1, 6))
+    min_count = _compute_min_subquestion_count(
+        capped_target_count,
+        available_chunks=len(chunks),
+        context_chunk_limit=context_chunk_limit,
+    )
 
     prompt = PromptTemplate(
         template="""
@@ -57,11 +78,11 @@ def generate_subquestions_from_chunks(
                 "query": user_query,
                 "context": context,
                 "min_count": min_count,
-                "target_count": target_count,
+                "target_count": capped_target_count,
             }
         )
         deduped = list(dict.fromkeys(q.strip() for q in result.questions if q and q.strip()))
-        return deduped[:target_count]
+        return deduped[:capped_target_count]
     except Exception as exc:
         print("Subquestion parsing failed:", exc)
         raise

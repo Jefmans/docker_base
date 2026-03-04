@@ -34,6 +34,41 @@ def stable_chunk_id(text: str, meta_id: str | None = None) -> str:
     return meta_id or hashlib.sha1(text.encode("utf-8")).hexdigest()
 
 
+def _dedupe_chunk_dicts(chunk_dicts: list[dict]) -> list[dict]:
+    return list({chunk["id"]: chunk for chunk in chunk_dicts if chunk.get("id")}.values())
+
+
+def _retrieve_question_chunks(
+    questions: list[str],
+    *,
+    retrieval_top_k: int,
+    scope: ResearchScope | None,
+    max_questions: int = 4,
+) -> list[dict]:
+    selected_questions = [question for question in questions if question and question.strip()][:max_questions]
+    if not selected_questions:
+        return []
+
+    per_question_k = max(2, min(8, retrieval_top_k // max(1, len(selected_questions))))
+    chunk_dicts: list[dict] = []
+    for question in selected_questions:
+        results = search_chunks(question, top_k=per_question_k, return_docs=True, scope=scope)
+        for doc in results:
+            chunk_id = stable_chunk_id(
+                doc.page_content,
+                doc.metadata.get("id") or doc.metadata.get("_id"),
+            )
+            chunk_dicts.append(
+                {
+                    "id": chunk_id,
+                    "text": doc.page_content,
+                    "page": doc.metadata.get("page"),
+                    "source": doc.metadata.get("source") or doc.metadata.get("source_pdf"),
+                }
+            )
+    return _dedupe_chunk_dicts(chunk_dicts)
+
+
 def _hydrate_node_in_memory(
     node: ResearchNode,
     chunk_dicts: list[dict],
@@ -91,7 +126,7 @@ def enrich_node_with_chunks_and_subquestions(
             }
         )
 
-    chunk_dicts = list({chunk["id"]: chunk for chunk in chunk_dicts}.values())
+    chunk_dicts = _dedupe_chunk_dicts(chunk_dicts)
     evidence_profile = build_node_evidence_profile(node, chunk_dicts)
     execution_plan = build_node_execution_plan(node, tree.plan, evidence_profile)
     logger.info(
@@ -106,24 +141,52 @@ def enrich_node_with_chunks_and_subquestions(
         execution_plan.should_attempt_depth,
     )
 
+    subquestions = generate_subquestions_from_chunks(
+        [chunk["text"] for chunk in chunk_dicts],
+        node.title,
+        target_count=execution_plan.subquestion_target,
+        context_chunk_limit=execution_plan.context_chunk_limit,
+    )
+
+    follow_up_chunks = _retrieve_question_chunks(
+        subquestions,
+        retrieval_top_k=execution_plan.retrieval_top_k,
+        scope=tree.scope,
+        max_questions=max(1, min(len(subquestions), 4)),
+    )
+    if follow_up_chunks:
+        logger.info(
+            "Node '%s' follow-up retrieval added %s chunks from %s questions",
+            node.title,
+            len(follow_up_chunks),
+            min(len(subquestions), 4),
+        )
+    merged_chunk_dicts = _dedupe_chunk_dicts(chunk_dicts + follow_up_chunks)
+    evidence_profile = build_node_evidence_profile(node, merged_chunk_dicts)
+    execution_plan = build_node_execution_plan(node, tree.plan, evidence_profile)
+    logger.info(
+        "Node '%s' post-follow-up evidence density=%s unique_chunks=%s unique_sources=%s "
+        "context_limit=%s subquestion_target=%s should_attempt_depth=%s",
+        node.title,
+        execution_plan.evidence_density,
+        evidence_profile.unique_chunk_count,
+        evidence_profile.unique_source_count,
+        execution_plan.context_chunk_limit,
+        execution_plan.subquestion_target,
+        execution_plan.should_attempt_depth,
+    )
+
     db = SessionLocal()
     try:
-        upsert_chunks(db, chunk_dicts)
-        attach_chunks_to_node(db, node.id, [chunk["id"] for chunk in chunk_dicts])
-
-        subquestions = generate_subquestions_from_chunks(
-            [chunk["text"] for chunk in chunk_dicts],
-            node.title,
-            target_count=execution_plan.subquestion_target,
-            context_chunk_limit=execution_plan.context_chunk_limit,
-        )
+        upsert_chunks(db, merged_chunk_dicts)
+        attach_chunks_to_node(db, node.id, [chunk["id"] for chunk in merged_chunk_dicts])
         question_ids = upsert_questions(db, subquestions, source="expansion")
         attach_questions_to_node(db, node.id, question_ids)
-        _hydrate_node_in_memory(node, chunk_dicts, subquestions)
+        _hydrate_node_in_memory(node, merged_chunk_dicts, subquestions)
         logger.info(
             "Node '%s' attached %s chunks and generated %s expansion questions",
             node.title,
-            len(chunk_dicts),
+            len(merged_chunk_dicts),
             len(subquestions),
         )
 
