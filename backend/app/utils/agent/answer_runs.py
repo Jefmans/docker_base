@@ -23,6 +23,7 @@ def create_answer_run(
         payload["answer_run"] = {
             "status": "pending",
             "stage": "Queued",
+            "failed_stage": None,
             "requested_at": _iso_now(),
             "started_at": None,
             "finished_at": None,
@@ -44,6 +45,7 @@ def update_answer_run(
     *,
     status: str | None = None,
     stage: str | None = None,
+    failed_stage: str | None = None,
     error: str | None = None,
     result: dict[str, Any] | None = None,
 ) -> None:
@@ -58,9 +60,12 @@ def update_answer_run(
             run["status"] = status
         if stage is not None:
             run["stage"] = stage
+        if failed_stage is not None:
+            run["failed_stage"] = failed_stage
         if status == "running":
             run["started_at"] = run.get("started_at") or _iso_now()
             run["error"] = None
+            run["failed_stage"] = None
         if status in {"completed", "failed"}:
             run["finished_at"] = _iso_now()
         if error is not None:

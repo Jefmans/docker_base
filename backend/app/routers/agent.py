@@ -217,8 +217,11 @@ def _run_full_agent_pipeline(
 
 
 def _run_answer_job(session_id: str, request: AgentQueryRequest) -> None:
+    last_stage = "Queued"
     try:
         def mark(stage: str) -> None:
+            nonlocal last_stage
+            last_stage = stage
             update_answer_run(session_id, status="running", stage=stage)
 
         mark("Starting research tree")
@@ -229,7 +232,13 @@ def _run_answer_job(session_id: str, request: AgentQueryRequest) -> None:
         )
         update_answer_run(session_id, status="completed", stage="Completed", result=result)
     except Exception as exc:
-        update_answer_run(session_id, status="failed", stage="Failed", error=str(exc))
+        update_answer_run(
+            session_id,
+            status="failed",
+            stage=last_stage,
+            failed_stage=last_stage,
+            error=str(exc),
+        )
     
 
 

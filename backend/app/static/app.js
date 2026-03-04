@@ -384,6 +384,10 @@ function renderAnswer() {
 
   if (state.answerRun && state.answerRun.status !== "completed") {
     const scope = state.answerRun.scope || { mode: "all" };
+    const failureBlock =
+      state.answerRun.status === "failed" && state.answerRun.error
+        ? `<p class="helper">Failure during ${escapeHtml(state.answerRun.failed_stage || state.answerRun.stage || "processing")}: ${escapeHtml(state.answerRun.error)}</p>`
+        : `<p class="helper">The research tree is running in the backend. This view will update automatically.</p>`;
     elements.answerEmpty.hidden = true;
     elements.answerOutput.hidden = false;
     elements.answerOutput.innerHTML = `
@@ -391,7 +395,7 @@ function renderAnswer() {
         <div class="answer-header">
           <div>
             <h3 class="answer-title">${escapeHtml(state.answerRun.query || "Building answer")}</h3>
-            <p class="helper">The research tree is running in the backend. This view will update automatically.</p>
+            ${failureBlock}
           </div>
           <div class="answer-meta">
             <span class="metadata-chip">${escapeHtml(humanScopeLabel(scope))}</span>
