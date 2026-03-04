@@ -62,6 +62,11 @@ services:
       POSTGRES_DB: testdb
     volumes:
       - postgres_data:/var/lib/postgresql/data
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U test -d testdb"]
+      interval: 5s
+      timeout: 5s
+      retries: 20
     networks:
       - internal_backend
     labels:
@@ -160,6 +165,9 @@ services:
       context: ./backend
     container_name: backend
     restart: always
+    depends_on:
+      postgres:
+        condition: service_healthy
     networks:
       - internal_backend
     labels:
@@ -210,9 +218,14 @@ services:
     networks:
       - internal_backend
     depends_on:
-      - backend
-      - elasticsearch
-      - minio
+      postgres:
+        condition: service_healthy
+      backend:
+        condition: service_started
+      elasticsearch:
+        condition: service_started
+      minio:
+        condition: service_started
 
 
 
