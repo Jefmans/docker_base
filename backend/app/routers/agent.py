@@ -93,6 +93,21 @@ def _run_full_agent_pipeline(request: AgentQueryRequest, *, session_id: str | No
     db = SessionLocal()
     try:
         repo = ResearchTreeRepository(db)
+        tree_with_root_questions = repo.load(active_session_id)
+
+        if subq:
+            qids = upsert_questions(db, subq, source="root_subq")
+            for qid, qtext in zip(qids, subq):
+                best = choose_best_node_for_question(db, qtext, tree_with_root_questions)
+                attach_questions_to_node(db, best.id, [qid])
+
+        db.commit()
+    finally:
+        db.close()
+
+    db = SessionLocal()
+    try:
+        repo = ResearchTreeRepository(db)
         tree_for_outline = repo.load(active_session_id)
     finally:
         db.close()
@@ -124,12 +139,6 @@ def _run_full_agent_pipeline(request: AgentQueryRequest, *, session_id: str | No
 
         for s, n in zip(filtered_sections, tree.root_node.subnodes):
             _attach_all(s, n)
-
-        if subq:
-            qids = upsert_questions(db, subq, source="root_subq")
-            for qid, qtext in zip(qids, subq):
-                best = choose_best_node_for_question(db, qtext, tree)
-                attach_questions_to_node(db, best.id, [qid])
 
         db.commit()
     finally:
