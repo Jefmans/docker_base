@@ -10,6 +10,7 @@ class ResearchScope(BaseModel):
     project_id: Optional[str] = None
     filenames: List[str] = Field(default_factory=list)
     label: Optional[str] = None
+    document_count: int = 0
 
     def search_filters(self) -> Optional[dict]:
         if self.mode == "all" or not self.filenames:
@@ -17,6 +18,23 @@ class ResearchScope(BaseModel):
         if len(self.filenames) == 1:
             return {"source_pdf": self.filenames[0]}
         return {"source_pdf": list(self.filenames)}
+
+
+class ResearchPlan(BaseModel):
+    query_complexity: int = 1
+    root_top_k: int = 5
+    root_context_chunks: int = 10
+    root_subquestion_target: int = 5
+    outline_target_sections: int = 4
+    outline_max_subsections: int = 2
+    section_top_k: int = 8
+    section_context_chunks: int = 12
+    section_subquestion_target: int = 4
+    summary_context_sections: int = 8
+    desired_depth: int = 2
+    min_novel_questions_to_deepen: int = 2
+    section_length_hint: str = "2-4 compact paragraphs"
+    evidence_profile: str = "narrow"
 
 class Chunk(BaseModel):
     id: str
@@ -89,6 +107,7 @@ class ResearchTree(BaseModel):
     query: str
     root_node: ResearchNode
     scope: ResearchScope = Field(default_factory=ResearchScope)
+    plan: ResearchPlan = Field(default_factory=ResearchPlan)
     used_questions: Set[str] = Field(default_factory=set)
     used_chunk_ids: Set[str] = Field(default_factory=set)
 
@@ -135,6 +154,7 @@ class ResearchTree(BaseModel):
         return {
             "query": self.query,
             "scope": self.scope.model_dump(),
+            "plan": self.plan.model_dump(),
             "root_node": clean_node(self.root_node),
             "used_questions": list(self.used_questions),
             "used_chunk_ids": list(self.used_chunk_ids),

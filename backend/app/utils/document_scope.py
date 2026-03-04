@@ -32,6 +32,7 @@ def resolve_research_scope(
             project_id=str(document.project_id) if document.project_id else None,
             filenames=[document.filename],
             label=document.title or _display_filename(document.filename),
+            document_count=1,
         )
 
     if project_id:
@@ -50,6 +51,8 @@ def resolve_research_scope(
             project_id=str(project.id),
             filenames=[document.filename for document in documents],
             label=project.name,
+            document_count=len(documents),
         )
 
-    return ResearchScope(mode="all", label="All indexed documents")
+    document_count = db.query(Document).count()
+    return ResearchScope(mode="all", label="All indexed documents", document_count=document_count)

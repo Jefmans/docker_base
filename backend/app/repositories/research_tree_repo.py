@@ -58,10 +58,20 @@ class ResearchTreeRepository:
         # ensure session row exists (stores query + optional snapshot if you want)
         sess = self.db.query(SessionModel).filter(SessionModel.id == session_id).first()
         if sess is None:
-            self.db.add(SessionModel(id=session_id, query=tree.query, tree={"scope": tree.scope.model_dump()}))
+            self.db.add(
+                SessionModel(
+                    id=session_id,
+                    query=tree.query,
+                    tree={
+                        "scope": tree.scope.model_dump(),
+                        "plan": tree.plan.model_dump(),
+                    },
+                )
+            )
         else:
             payload = dict(sess.tree or {})
             payload["scope"] = tree.scope.model_dump()
+            payload["plan"] = tree.plan.model_dump()
             sess.query = tree.query
             sess.tree = payload
 
@@ -75,6 +85,7 @@ class ResearchTreeRepository:
             raise ValueError("Session not found")
         original_query = sess.query
         scope_payload = dict((sess.tree or {}).get("scope") or {})
+        plan_payload = dict((sess.tree or {}).get("plan") or {})
 
         roots = (
             self.db.query(ResearchNodeORM)
@@ -133,4 +144,9 @@ class ResearchTreeRepository:
             node.chunks = c_by_node.get(nid, [])
             node.chunk_ids = {c.id for c in node.chunks}
 
-        return ResearchTree(query=original_query, root_node=id_map[root_orm.id], scope=scope_payload)
+        return ResearchTree(
+            query=original_query,
+            root_node=id_map[root_orm.id],
+            scope=scope_payload,
+            plan=plan_payload,
+        )

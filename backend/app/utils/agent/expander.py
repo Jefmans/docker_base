@@ -3,6 +3,12 @@ from app.utils.agent.subquestions import generate_subquestions_from_chunks
 from app.models.research_tree import ResearchNode, ResearchTree, Chunk, ResearchScope
 from app.utils.agent.controller import should_deepen_node, get_novel_expansion_questions
 from app.utils.agent.writer import write_section, write_summary, write_conclusion
+from app.utils.agent.planning import (
+    node_context_chunk_limit,
+    node_retrieval_top_k,
+    node_should_attempt_depth,
+    node_subquestion_target,
+)
 from app.utils.agent.repo import upsert_chunks, attach_chunks_to_node, upsert_questions, attach_questions_to_node, update_node_fields
 from app.db.db import SessionLocal  # add this import
 import hashlib
@@ -15,12 +21,13 @@ def stable_chunk_id(text: str, meta_id: str | None = None) -> str:
     return meta_id or hashlib.sha1(text.encode("utf-8")).hexdigest()
 
 
-def enrich_node_with_chunks_and_subquestions(node: ResearchNode, tree: ResearchTree, top_k: int = 10):
+def enrich_node_with_chunks_and_subquestions(node: ResearchNode, tree: ResearchTree, top_k: int | None = None):
     # 0) build a query
     queries = [node.title] + getattr(node, "questions", [])
     combined_query = " ".join(q for q in queries if q).strip() or node.title
+    retrieval_top_k = top_k or node_retrieval_top_k(tree.plan, node)
 
-    results = search_chunks(combined_query, top_k=top_k, return_docs=True, scope=tree.scope)
+    results = search_chunks(combined_query, top_k=retrieval_top_k, return_docs=True, scope=tree.scope)
 
     chunk_dicts = []
     for doc in results:
@@ -44,7 +51,12 @@ def enrich_node_with_chunks_and_subquestions(node: ResearchNode, tree: ResearchT
         upsert_chunks(db, chunk_dicts)
         attach_chunks_to_node(db, node.id, [c["id"] for c in chunk_dicts])
 
-        subqs = generate_subquestions_from_chunks([c["text"] for c in chunk_dicts], node.title)
+        subqs = generate_subquestions_from_chunks(
+            [c["text"] for c in chunk_dicts],
+            node.title,
+            target_count=node_subquestion_target(tree.plan, node),
+            context_chunk_limit=node_context_chunk_limit(tree.plan, node),
+        )
         qids = upsert_questions(db, subqs, source="expansion")
         attach_questions_to_node(db, node.id, qids)
 
@@ -81,12 +93,18 @@ def deepen_node_with_subquestions(
         db.close()
 
 
-def process_node_recursively(node: ResearchNode, tree: ResearchTree, top_k: int = 10):
+def process_node_recursively(node: ResearchNode, tree: ResearchTree, top_k: int | None = None):
+    retrieval_top_k = node_retrieval_top_k(tree.plan, node)
+    context_chunk_limit = node_context_chunk_limit(tree.plan, node)
+
     # 1) Expand the node (chunks + new expansion questions)
-    enrich_node_with_chunks_and_subquestions(node, tree, top_k=top_k)
+    enrich_node_with_chunks_and_subquestions(node, tree, top_k=retrieval_top_k)
 
     # 2) Decide whether to deepen using DB-based novelty
-    if should_deepen_node(node):
+    if node_should_attempt_depth(tree.plan, node) and should_deepen_node(
+        node,
+        min_novel=tree.plan.min_novel_questions_to_deepen,
+    ):
         from app.db.db import SessionLocal
         db = SessionLocal()
         try:
@@ -97,10 +115,14 @@ def process_node_recursively(node: ResearchNode, tree: ResearchTree, top_k: int 
             db.close()
 
         if novel_expansion:
-            deepen_node_with_subquestions(node, novel_expansion, top_k=top_k, scope=tree.scope)
+            deepen_node_with_subquestions(node, novel_expansion, top_k=retrieval_top_k, scope=tree.scope)
 
     # 3) Generate text for this node (CONTENT ONLY)
-    write_section(node)
+    write_section(
+        node,
+        context_chunk_limit=context_chunk_limit,
+        length_hint=tree.plan.section_length_hint,
+    )
 
     # 4) Persist generated fields (no summary/conclusion here)
     db = SessionLocal()
@@ -116,7 +138,7 @@ def process_node_recursively(node: ResearchNode, tree: ResearchTree, top_k: int 
 
     # 5) Recurse
     for subnode in node.subnodes:
-        process_node_recursively(subnode, tree, top_k=top_k)
+        process_node_recursively(subnode, tree)
 
 
         

@@ -162,10 +162,22 @@ WHAT HAS BEEN FIXED ALREADY
    - The frontend polls the persisted tree and renders a live nested tree view
      during construction
 
+7. The tree now uses an adaptive research plan
+   - Root retrieval, root subquestion count, outline size, section retrieval,
+     section context size, section length guidance, and desired depth are now
+     derived from query complexity and scope breadth
+   - The pipeline is no longer supposed to use one near-constant budget for
+     every question
+
 
 CURRENT WEAKNESSES
 ------------------
-1. Helper layers still open their own DB sessions during recursive processing
+1. The adaptive planner is heuristic-based, not evidence-scored yet
+   - File: backend/app/utils/agent/planning.py
+   - The tree now adapts to query/scope breadth, but it still does not inspect
+     retrieval scores or source diversity deeply enough
+
+2. Helper layers still open their own DB sessions during recursive processing
    - Files:
      backend/app/utils/agent/expander.py
      backend/app/utils/agent/controller.py
@@ -173,28 +185,28 @@ CURRENT WEAKNESSES
    - full_run is leaner now, but the recursive pipeline still hides a lot of
      DB traffic behind helper calls
 
-2. The pipeline mixes orchestration, persistence, and LLM logic in one large router file
+3. The pipeline mixes orchestration, persistence, and LLM logic in one large router file
    - File: backend/app/routers/agent.py
    - This should eventually become a service layer
 
-3. Root abstract handling is weak
+4. Root abstract handling is weak
    - The returned abstract often comes from root_node.content
    - But root content is not clearly produced as a true abstract stage
 
-4. Summary and conclusion generation are too similar
+5. Summary and conclusion generation are too similar
    - File: backend/app/utils/agent/writer.py
    - write_summary() and write_conclusion() are almost the same in structure
    - They should become clearly separate writing goals
 
-5. Initial root chunks lose metadata
+6. Initial root chunks lose metadata
    - Initial chunks are stored with page=None and source=None
    - This loses provenance that was available in vector retrieval
 
-6. Tree persistence is append/update oriented, not fully pruning old branches
+7. Tree persistence is append/update oriented, not fully pruning old branches
    - File: backend/app/repositories/research_tree_repo.py
    - This can leave stale nodes if a structure changes significantly
 
-7. full_run still reopens sessions around major phases
+8. full_run still reopens sessions around major phases
    - File: backend/app/routers/agent.py
    - The worst repeated tree reloads are gone, but there are still separate
      sessions for the setup, outline persistence, and root finalization phases
@@ -218,12 +230,10 @@ Phase 3: Session and reload reduction
 3. Persist checkpoints only where needed
 
 Phase 4: Retrieval quality and provenance
-1. Keep page/source metadata on initial root chunks
-2. Improve retrieval payloads used for writing
-3. Tune top_k separately for:
-   - initial retrieval
-   - expansion retrieval
-   - section writing context
+1. Done: adaptive retrieval and writing budgets now vary with query/scope breadth
+2. Keep page/source metadata on initial root chunks
+3. Improve retrieval payloads used for writing
+4. Tune using source diversity / retrieval scores, not only heuristics
 
 Phase 5: Code structure
 1. Move large orchestration logic out of backend/app/routers/agent.py
@@ -243,25 +253,25 @@ NEXT RECOMMENDED CHANGE
 -----------------------
 The next best cleanup step is:
 
-Push DB session ownership out of recursive helper layers
+Make the adaptive planner evidence-aware
 
 Why this is next:
-- the top-level orchestration is cleaner now, so the remaining hidden DB work is
-  concentrated in expander/controller/writer
-- it will make transaction boundaries explicit across the whole tree pipeline
-- it will make later service extraction much easier
+- the tree now adapts to query/scope breadth, but not yet strongly enough to
+  source diversity and retrieval quality
+- better evidence-awareness should make article size and branching feel less generic
+- after that, pushing DB session ownership down the stack will be cleaner
 
 Expected effect:
-- fewer hidden DB round-trips inside recursion
-- more predictable transaction boundaries
-- a clearer split between orchestration and helper logic
+- better variation in article size, branching, and section depth
+- fewer generic same-sized answers across very different scopes
+- a stronger base for later transaction cleanup
 
 
 ACCEPTANCE CRITERIA FOR THE NEXT STEP
 -------------------------------------
 When the session/reload cleanup is done:
 
-1. expander/controller/writer should be callable with an existing DB session
+1. the planner should react not only to query text but also to retrieved evidence shape
 2. The logic should remain transactionally correct
 3. full_run should still work end-to-end
 4. start_answer_run / polling flow should still work
@@ -288,3 +298,4 @@ CHANGE LOG
 - Removed hidden commit behavior from ResearchTreeRepository.save()
 - Reduced full_run tree reloads by keeping the working tree in memory longer
 - Added live research-tree visibility in the frontend during Build Answer runs
+- Added adaptive research planning so tree size and writing budgets vary by query and scope

@@ -14,6 +14,7 @@ from app.utils.agent.repo import upsert_questions, attach_questions_to_node, upd
 from app.utils.agent.router_utils import choose_best_node_for_question, get_top_level_section_or_400, _filter_structural_sections
 from app.utils.document_scope import resolve_research_scope
 from app.utils.agent.answer_runs import create_answer_run, get_answer_run, update_answer_run
+from app.utils.agent.planning import build_research_plan
 import hashlib
 from app.db.db import SessionLocal 
 from app.repositories.research_tree_repo import ResearchTreeRepository
@@ -116,11 +117,12 @@ def _run_full_agent_pipeline(
     try:
         _report_progress(progress_callback, "Resolving scope")
         scope = _resolve_scope_or_400(db, request)
+        plan = build_research_plan(user_query, scope, requested_top_k=request.top_k)
         _report_progress(progress_callback, "Retrieving initial chunks")
-        top_chunks = search_chunks(user_query, top_k=request.top_k, scope=scope)
+        top_chunks = search_chunks(user_query, top_k=plan.root_top_k, scope=scope)
 
         root_node = ResearchNode(title=request.query)
-        tree = ResearchTree(query=user_query, root_node=root_node, scope=scope)
+        tree = ResearchTree(query=user_query, root_node=root_node, scope=scope, plan=plan)
         repo = ResearchTreeRepository(db)
         repo.save(tree, active_session_id)
 
@@ -130,7 +132,12 @@ def _run_full_agent_pipeline(
         _mirror_chunks_on_node(tree.root_node, chunk_dicts)
 
         _report_progress(progress_callback, "Generating root questions")
-        subq = generate_subquestions_from_chunks([chunk["text"] for chunk in chunk_dicts], user_query)
+        subq = generate_subquestions_from_chunks(
+            [chunk["text"] for chunk in chunk_dicts],
+            user_query,
+            target_count=tree.plan.root_subquestion_target,
+            context_chunk_limit=tree.plan.root_context_chunks,
+        )
         _attach_questions_in_memory_and_db(db, tree, subq, source="root_subq")
 
         _report_progress(progress_callback, "Building outline")
@@ -165,7 +172,7 @@ def _run_full_agent_pipeline(
     section_outputs = []
     _report_progress(progress_callback, "Writing sections")
     for node in tree.root_node.subnodes:
-        process_node_recursively(node, tree, top_k=10)
+        process_node_recursively(node, tree, top_k=tree.plan.section_top_k)
 
     for node in tree.root_node.subnodes:
         section_outputs.extend(_collect_section_outputs(node))
@@ -199,6 +206,7 @@ def _run_full_agent_pipeline(
         "title": tree.root_node.title or user_query,
         "abstract": tree.root_node.content or "",
         "scope": tree.scope.model_dump(),
+        "plan": tree.plan.model_dump(),
         "outline": [s.dict() for s in filtered_sections],
         "sections": section_outputs,
         "article": article
@@ -231,10 +239,11 @@ async def start_query_session(request: AgentQueryRequest):
     finally:
         db.close()
 
-    top_chunks = search_chunks(user_query, top_k=request.top_k, scope=scope)
+    plan = build_research_plan(user_query, scope, requested_top_k=request.top_k)
+    top_chunks = search_chunks(user_query, top_k=plan.root_top_k, scope=scope)
 
     root_node = ResearchNode(title=user_query)
-    tree = ResearchTree(query=user_query, root_node=root_node, scope=scope)
+    tree = ResearchTree(query=user_query, root_node=root_node, scope=scope, plan=plan)
 
     session_id = str(uuid4())
     db = SessionLocal()
@@ -256,7 +265,8 @@ async def start_query_session(request: AgentQueryRequest):
 
     return {"status": "success", "session_id": session_id, "query": user_query,
             "preview_chunks": top_chunks[:3],
-            "scope": scope.model_dump()}
+            "scope": scope.model_dump(),
+            "plan": plan.model_dump()}
 
 
 @router.post("/agent/subquestions")
@@ -274,7 +284,12 @@ def generate_subquestions(session_id: str):
         # (optional) de-dup to keep the prompt lean
         chunks = list(dict.fromkeys(chunks))
 
-        subq = generate_subquestions_from_chunks(chunks, tree.query)
+        subq = generate_subquestions_from_chunks(
+            chunks,
+            tree.query,
+            target_count=tree.plan.root_subquestion_target,
+            context_chunk_limit=tree.plan.root_context_chunks,
+        )
 
         qids = upsert_questions(db, subq, source="root_subq")
 
@@ -368,7 +383,11 @@ def write_section_by_id(session_id: str, section_id: int):
         node = get_top_level_section_or_400(tree, section_id)
 
         # Generate content (writer already reads questions/chunks from DB)
-        write_section(node)
+        write_section(
+            node,
+            context_chunk_limit=tree.plan.section_context_chunks,
+            length_hint=tree.plan.section_length_hint,
+        )
 
         update_node_fields(db, node.id, content=node.content, is_final=True)
         db.commit()
@@ -499,8 +518,8 @@ def complete_section(session_id: str, section_id: int):
 
         node = get_top_level_section_or_400(tree, section_id)
 
-        node.summary = write_summary(node)
-        node.conclusion = write_conclusion(node)
+        node.summary = write_summary(node, context_chunk_limit=tree.plan.section_context_chunks)
+        node.conclusion = write_conclusion(node, context_chunk_limit=tree.plan.section_context_chunks)
         # save_research_tree_db(session_id, tree)
         # persist into DB so the tree is source-of-truth
         update_node_fields(db, node.id, summary=node.summary, conclusion=node.conclusion, is_final=True)

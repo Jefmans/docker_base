@@ -1,26 +1,39 @@
 from typing import List
-from pydantic import BaseModel
-from langchain_openai import ChatOpenAI
+
 from langchain.output_parsers import PydanticOutputParser
 from langchain.prompts import PromptTemplate
+from langchain_openai import ChatOpenAI
+from pydantic import BaseModel
+
 
 class SubquestionList(BaseModel):
     questions: List[str]
 
 
-def generate_subquestions_from_chunks(chunks: List[str], user_query: str, model_name: str = "gpt-4o") -> List[str]:
+def generate_subquestions_from_chunks(
+    chunks: List[str],
+    user_query: str,
+    model_name: str = "gpt-4o",
+    *,
+    target_count: int = 6,
+    context_chunk_limit: int = 12,
+) -> List[str]:
     llm = ChatOpenAI(model=model_name, temperature=0)
-
-    # Limit chunk length to avoid context overflow
-    context = "\n\n".join(chunks[:20])
-
+    context = "\n\n".join(chunks[:context_chunk_limit])
     parser = PydanticOutputParser(pydantic_object=SubquestionList)
+    min_count = max(3, min(target_count - 1, 6))
 
     prompt = PromptTemplate(
         template="""
-            You are a scientific assistant. Based on the user query and real scientific context below, generate a list of 5–10 detailed subquestions.
+            You are a scientific assistant. Based on the user query and scientific context below,
+            generate between {min_count} and {target_count} detailed subquestions.
 
-            Only ask questions that are grounded in the context. Return your result using this format:
+            Scale the number of subquestions to the breadth of the evidence.
+            Narrow or sparse evidence should produce fewer subquestions.
+            Broad or multi-document evidence can justify more.
+
+            Only ask questions that are grounded in the context. Avoid filler and duplicates.
+            Return your result using this format:
             {format_instructions}
 
             === USER QUESTION ===
@@ -29,15 +42,23 @@ def generate_subquestions_from_chunks(chunks: List[str], user_query: str, model_
             === CONTEXT ===
             {context}
             """,
-        input_variables=["query", "context"],
-        partial_variables={"format_instructions": parser.get_format_instructions()}
+        input_variables=["query", "context", "min_count", "target_count"],
+        partial_variables={"format_instructions": parser.get_format_instructions()},
     )
 
     chain = prompt | llm | parser
 
     try:
-        result = chain.invoke({"query": user_query, "context": context})
-        return result.questions
-    except Exception as e:
-        print("❌ Subquestion parsing failed:", e)
+        result = chain.invoke(
+            {
+                "query": user_query,
+                "context": context,
+                "min_count": min_count,
+                "target_count": target_count,
+            }
+        )
+        deduped = list(dict.fromkeys(q.strip() for q in result.questions if q and q.strip()))
+        return deduped[:target_count]
+    except Exception as exc:
+        print("Subquestion parsing failed:", exc)
         raise
