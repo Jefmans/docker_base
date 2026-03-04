@@ -546,6 +546,115 @@ input[type="file"]:focus {
   gap: 16px;
 }
 
+.answer-tree-shell {
+  margin-top: 18px;
+}
+
+.tree-card {
+  background: linear-gradient(180deg, rgba(255, 252, 246, 0.95), rgba(248, 242, 232, 0.88));
+  border: 1px solid rgba(23, 32, 51, 0.09);
+  border-radius: calc(var(--radius) - 6px);
+  padding: 18px;
+}
+
+.tree-topline {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  justify-content: space-between;
+  gap: 10px;
+  margin-bottom: 14px;
+}
+
+.tree-title {
+  margin: 0;
+  font-family: var(--display-font);
+  font-size: 1.25rem;
+}
+
+.tree-list,
+.tree-children {
+  list-style: none;
+  margin: 0;
+  padding: 0;
+}
+
+.tree-children {
+  margin-top: 10px;
+  padding-left: 18px;
+  border-left: 1px solid rgba(23, 32, 51, 0.1);
+}
+
+.tree-node {
+  position: relative;
+}
+
+.tree-node + .tree-node {
+  margin-top: 10px;
+}
+
+.tree-node-body {
+  display: grid;
+  gap: 8px;
+  padding: 12px 14px;
+  border-radius: 18px;
+  background: rgba(255, 255, 255, 0.62);
+  border: 1px solid rgba(23, 32, 51, 0.08);
+}
+
+.tree-node-header {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  justify-content: space-between;
+  gap: 8px;
+}
+
+.tree-node-title {
+  margin: 0;
+  font-weight: 700;
+}
+
+.tree-node-meta,
+.tree-node-flags {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 8px;
+}
+
+.tree-badge {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  padding: 6px 10px;
+  border-radius: 999px;
+  background: rgba(23, 32, 51, 0.06);
+  color: var(--muted);
+  font-size: 0.76rem;
+  font-weight: 700;
+}
+
+.tree-badge.live {
+  background: rgba(17, 75, 113, 0.12);
+  color: #114b71;
+}
+
+.tree-badge.done {
+  background: rgba(36, 99, 74, 0.12);
+  color: var(--success);
+}
+
+.tree-badge.pending {
+  background: rgba(164, 93, 0, 0.12);
+  color: var(--warn);
+}
+
+.tree-node-snippet {
+  margin: 0;
+  color: var(--muted);
+  line-height: 1.55;
+}
+
 .result-card p {
   margin: 0;
   line-height: 1.6;

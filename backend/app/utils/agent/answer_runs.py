@@ -22,9 +22,11 @@ def create_answer_run(
         payload["scope"] = scope
         payload["answer_run"] = {
             "status": "pending",
+            "stage": "Queued",
             "requested_at": _iso_now(),
             "started_at": None,
             "finished_at": None,
+            "updated_at": _iso_now(),
             "error": None,
             "result": None,
         }
@@ -40,7 +42,8 @@ def create_answer_run(
 def update_answer_run(
     session_id: str,
     *,
-    status: str,
+    status: str | None = None,
+    stage: str | None = None,
     error: str | None = None,
     result: dict[str, Any] | None = None,
 ) -> None:
@@ -51,9 +54,12 @@ def update_answer_run(
 
         payload = dict(session.tree or {})
         run = dict(payload.get("answer_run") or {})
-        run["status"] = status
+        if status is not None:
+            run["status"] = status
+        if stage is not None:
+            run["stage"] = stage
         if status == "running":
-            run["started_at"] = _iso_now()
+            run["started_at"] = run.get("started_at") or _iso_now()
             run["error"] = None
         if status in {"completed", "failed"}:
             run["finished_at"] = _iso_now()
@@ -61,6 +67,7 @@ def update_answer_run(
             run["error"] = error
         if result is not None:
             run["result"] = result
+        run["updated_at"] = _iso_now()
 
         payload["answer_run"] = run
         session.tree = payload

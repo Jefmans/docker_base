@@ -157,6 +157,11 @@ WHAT HAS BEEN FIXED ALREADY
    - Database writes still happen where helper layers require them, but the
      main orchestration is less round-trip heavy
 
+6. The frontend can now follow an answer run live
+   - Build Answer now exposes backend stage updates while the run is active
+   - The frontend polls the persisted tree and renders a live nested tree view
+     during construction
+
 
 CURRENT WEAKNESSES
 ------------------
@@ -282,3 +287,4 @@ CHANGE LOG
 - Fixed root subquestion ordering so outline generation now sees them
 - Removed hidden commit behavior from ResearchTreeRepository.save()
 - Reduced full_run tree reloads by keeping the working tree in memory longer
+- Added live research-tree visibility in the frontend during Build Answer runs

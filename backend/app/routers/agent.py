@@ -2,6 +2,7 @@ from fastapi import APIRouter, BackgroundTasks, HTTPException
 from fastapi.responses import JSONResponse, Response
 from uuid import uuid4
 from pydantic import BaseModel
+from typing import Callable
 from app.utils.agent.search_chunks import search_chunks
 from app.utils.agent.subquestions import generate_subquestions_from_chunks
 from app.utils.agent.outline import generate_outline_from_tree
@@ -98,12 +99,24 @@ def _collect_section_outputs(node: ResearchNode) -> list[dict]:
     return out
 
 
-def _run_full_agent_pipeline(request: AgentQueryRequest, *, session_id: str | None = None) -> dict:
+def _report_progress(progress_callback: Callable[[str], None] | None, stage: str) -> None:
+    if progress_callback:
+        progress_callback(stage)
+
+
+def _run_full_agent_pipeline(
+    request: AgentQueryRequest,
+    *,
+    session_id: str | None = None,
+    progress_callback: Callable[[str], None] | None = None,
+) -> dict:
     active_session_id = session_id or str(uuid4())
     user_query = request.query
     db = SessionLocal()
     try:
+        _report_progress(progress_callback, "Resolving scope")
         scope = _resolve_scope_or_400(db, request)
+        _report_progress(progress_callback, "Retrieving initial chunks")
         top_chunks = search_chunks(user_query, top_k=request.top_k, scope=scope)
 
         root_node = ResearchNode(title=request.query)
@@ -116,9 +129,11 @@ def _run_full_agent_pipeline(request: AgentQueryRequest, *, session_id: str | No
         attach_chunks_to_node(db, tree.root_node.id, [chunk["id"] for chunk in chunk_dicts])
         _mirror_chunks_on_node(tree.root_node, chunk_dicts)
 
+        _report_progress(progress_callback, "Generating root questions")
         subq = generate_subquestions_from_chunks([chunk["text"] for chunk in chunk_dicts], user_query)
         _attach_questions_in_memory_and_db(db, tree, subq, source="root_subq")
 
+        _report_progress(progress_callback, "Building outline")
         outline = generate_outline_from_tree(tree)
     finally:
         db.close()
@@ -132,6 +147,7 @@ def _run_full_agent_pipeline(request: AgentQueryRequest, *, session_id: str | No
     db = SessionLocal()
     try:
         repo = ResearchTreeRepository(db)
+        _report_progress(progress_callback, "Persisting outline")
         tree.root_node.subnodes = [node_from_outline_section(s) for s in filtered_sections]
         if outline.title:
             tree.root_node.title = outline.title
@@ -147,6 +163,7 @@ def _run_full_agent_pipeline(request: AgentQueryRequest, *, session_id: str | No
 
     from app.utils.agent.expander import process_node_recursively
     section_outputs = []
+    _report_progress(progress_callback, "Writing sections")
     for node in tree.root_node.subnodes:
         process_node_recursively(node, tree, top_k=10)
 
@@ -154,6 +171,7 @@ def _run_full_agent_pipeline(request: AgentQueryRequest, *, session_id: str | No
         section_outputs.extend(_collect_section_outputs(node))
 
     from app.utils.agent.writer import write_executive_summary, write_overall_conclusion
+    _report_progress(progress_callback, "Synthesizing answer")
     exec_summary = write_executive_summary(tree)
     overall_concl = write_overall_conclusion(tree)
     tree.root_node.summary = exec_summary
@@ -173,6 +191,7 @@ def _run_full_agent_pipeline(request: AgentQueryRequest, *, session_id: str | No
     finally:
         db.close()
 
+    _report_progress(progress_callback, "Finalizing article")
     article = finalize_article_from_tree(tree)
 
     return {
@@ -188,11 +207,18 @@ def _run_full_agent_pipeline(request: AgentQueryRequest, *, session_id: str | No
 
 def _run_answer_job(session_id: str, request: AgentQueryRequest) -> None:
     try:
-        update_answer_run(session_id, status="running")
-        result = _run_full_agent_pipeline(request, session_id=session_id)
-        update_answer_run(session_id, status="completed", result=result)
+        def mark(stage: str) -> None:
+            update_answer_run(session_id, status="running", stage=stage)
+
+        mark("Starting research tree")
+        result = _run_full_agent_pipeline(
+            request,
+            session_id=session_id,
+            progress_callback=mark,
+        )
+        update_answer_run(session_id, status="completed", stage="Completed", result=result)
     except Exception as exc:
-        update_answer_run(session_id, status="failed", error=str(exc))
+        update_answer_run(session_id, status="failed", stage="Failed", error=str(exc))
     
 
 

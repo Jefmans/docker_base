@@ -7,6 +7,7 @@ const state = {
   searchResults: null,
   answerResult: null,
   answerRun: null,
+  answerTree: null,
   libraryTimer: null,
   answerPollTimer: null,
 };
@@ -32,6 +33,7 @@ const elements = {
   answerHelper: document.getElementById("answer-helper"),
   answerEmpty: document.getElementById("answer-empty"),
   answerOutput: document.getElementById("answer-output"),
+  answerTree: document.getElementById("answer-tree"),
   resultsEmpty: document.getElementById("results-empty"),
   resultsColumns: document.getElementById("results-columns"),
   textResults: document.getElementById("text-results"),
@@ -372,6 +374,8 @@ function renderAnswer() {
     elements.answerEmpty.hidden = false;
     elements.answerOutput.hidden = true;
     elements.answerOutput.innerHTML = "";
+    elements.answerTree.hidden = true;
+    elements.answerTree.innerHTML = "";
     return;
   }
 
@@ -389,11 +393,13 @@ function renderAnswer() {
           <div class="answer-meta">
             <span class="metadata-chip">${escapeHtml(humanScopeLabel(scope))}</span>
             <span class="metadata-chip">status ${escapeHtml(state.answerRun.status || "pending")}</span>
+            <span class="metadata-chip">stage ${escapeHtml(state.answerRun.stage || "Queued")}</span>
             <span class="metadata-chip">session ${escapeHtml(state.answerRun.session_id || "")}</span>
           </div>
         </div>
       </article>
     `;
+    renderAnswerTree();
     return;
   }
 
@@ -412,6 +418,7 @@ function renderAnswer() {
         </div>
         <div class="answer-meta">
           <span class="metadata-chip">${escapeHtml(humanScopeLabel(scope))}</span>
+          <span class="metadata-chip">${escapeHtml(state.answerRun?.stage || "Completed")}</span>
           <span class="metadata-chip">session ${escapeHtml(state.answerResult.session_id || "")}</span>
         </div>
       </div>
@@ -425,6 +432,109 @@ function renderAnswer() {
       <pre class="answer-article">${escapeHtml(article)}</pre>
     </article>
   `;
+  renderAnswerTree();
+}
+
+function summarizeNode(node) {
+  if (node.content) {
+    return node.content.slice(0, 220);
+  }
+  if (node.summary) {
+    return node.summary.slice(0, 220);
+  }
+  if (node.questions?.length) {
+    return `${node.questions.length} question${node.questions.length === 1 ? "" : "s"} attached`;
+  }
+  return "Waiting for content.";
+}
+
+function classifyTreeNode(node) {
+  if (node.is_final || node.content) {
+    return { label: "written", className: "done" };
+  }
+  if ((node.questions?.length || 0) > 0 || (node.chunks?.length || 0) > 0 || (node.subnodes?.length || 0) > 0) {
+    return { label: "active", className: "live" };
+  }
+  return { label: "pending", className: "pending" };
+}
+
+function renderTreeNode(node) {
+  const status = classifyTreeNode(node);
+  const questionCount = node.questions?.length || 0;
+  const chunkCount = node.chunks?.length || 0;
+  const children = node.subnodes || [];
+
+  return `
+    <li class="tree-node">
+      <article class="tree-node-body">
+        <div class="tree-node-header">
+          <p class="tree-node-title">${escapeHtml(node.display_rank ? `${node.display_rank} ${node.title}` : node.title || "Untitled node")}</p>
+          <div class="tree-node-meta">
+            <span class="tree-badge ${status.className}">${escapeHtml(status.label)}</span>
+            <span class="tree-badge">q ${escapeHtml(questionCount)}</span>
+            <span class="tree-badge">chunks ${escapeHtml(chunkCount)}</span>
+            <span class="tree-badge">depth ${escapeHtml(node.level ?? "-")}</span>
+          </div>
+        </div>
+        <p class="tree-node-snippet">${escapeHtml(summarizeNode(node))}</p>
+        ${
+          children.length > 0
+            ? `<ul class="tree-children">${children.map((child) => renderTreeNode(child)).join("")}</ul>`
+            : ""
+        }
+      </article>
+    </li>
+  `;
+}
+
+function renderAnswerTree() {
+  if (!state.answerTree?.root_node) {
+    elements.answerTree.hidden = true;
+    elements.answerTree.innerHTML = "";
+    return;
+  }
+
+  const scope = state.answerTree.scope || state.answerResult?.scope || state.answerRun?.scope || { mode: "all" };
+  const root = state.answerTree.root_node;
+  const topNodes = root.subnodes || [];
+  elements.answerTree.hidden = false;
+  elements.answerTree.innerHTML = `
+    <article class="tree-card">
+      <div class="tree-topline">
+        <div>
+          <p class="eyebrow">Research Tree</p>
+          <h3 class="tree-title">${escapeHtml(root.title || state.answerTree.query || "Research tree")}</h3>
+        </div>
+        <div class="answer-meta">
+          <span class="metadata-chip">${escapeHtml(humanScopeLabel(scope))}</span>
+          ${
+            state.answerRun?.stage
+              ? `<span class="metadata-chip">stage ${escapeHtml(state.answerRun.stage)}</span>`
+              : ""
+          }
+        </div>
+      </div>
+      <ul class="tree-list">
+        ${
+          topNodes.length > 0
+            ? topNodes.map((node) => renderTreeNode(node)).join("")
+            : `<li class="tree-node"><article class="tree-node-body"><p class="tree-node-snippet">Root created. Waiting for outline sections.</p></article></li>`
+        }
+      </ul>
+    </article>
+  `;
+}
+
+async function refreshAnswerTree(sessionId) {
+  try {
+    const payload = await fetchJson(`agent/tree/${sessionId}`);
+    state.answerTree = payload;
+    renderAnswerTree();
+  } catch (error) {
+    if (!/not found/i.test(error.message || "")) {
+      console.error(error);
+    }
+  }
 }
 
 function scheduleAnswerPoll(sessionId, delayMs = 2500) {
@@ -438,10 +548,14 @@ function scheduleAnswerPoll(sessionId, delayMs = 2500) {
 
 async function pollAnswerRun(sessionId) {
   try {
-    const payload = await fetchJson(`agent/answer_runs/${sessionId}`);
+    const [payload] = await Promise.all([
+      fetchJson(`agent/answer_runs/${sessionId}`),
+      refreshAnswerTree(sessionId),
+    ]);
     state.answerRun = payload;
     if (payload.status === "completed" && payload.result) {
       state.answerResult = payload.result;
+      await refreshAnswerTree(sessionId);
       renderAnswer();
       elements.answerHelper.textContent = "Structured answer generated successfully.";
       setSignal("live", "Answer built");
@@ -588,6 +702,7 @@ async function handleDeleteDocument(document) {
     }
     if (state.answerRun?.scope?.mode === "document" && state.answerRun.scope.document_id === document.id) {
       state.answerRun = null;
+      state.answerTree = null;
     }
     renderAnswer();
     if (state.answerPollTimer) {
@@ -677,13 +792,16 @@ async function runBuildAnswer() {
     });
     state.answerResult = null;
     state.answerRun = startPayload;
+    state.answerTree = null;
     renderAnswer();
     setSignal("live", "Answer queued");
+    refreshAnswerTree(startPayload.session_id).catch(console.error);
     scheduleAnswerPoll(startPayload.session_id, 1000);
   } catch (error) {
     console.error(error);
     state.answerResult = null;
     state.answerRun = null;
+    state.answerTree = null;
     renderAnswer();
     elements.answerHelper.textContent = error.message;
     setSignal("error", error.message);
