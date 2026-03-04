@@ -97,17 +97,17 @@ function setScopeValue(mode, id) {
 }
 
 function findDocumentById(documentId) {
-  return state.documents.find((document) => document.id === documentId) || null;
+  return state.documents.find((doc) => doc.id === documentId) || null;
 }
 
 function findDocumentByFilename(filename) {
-  return state.documents.find((document) => document.filename === filename) || null;
+  return state.documents.find((doc) => doc.filename === filename) || null;
 }
 
 function displayFilename(filename) {
-  const document = findDocumentByFilename(filename);
-  if (document) {
-    return document.display_name;
+  const doc = findDocumentByFilename(filename);
+  if (doc) {
+    return doc.display_name;
   }
   if (!filename || !filename.includes("_")) {
     return filename || "";
@@ -148,10 +148,10 @@ function refreshProjectOptions() {
   if (state.documents.length > 0) {
     const documentGroup = document.createElement("optgroup");
     documentGroup.label = "Documents";
-    for (const document of state.documents) {
+    for (const doc of state.documents) {
       const option = document.createElement("option");
-      option.value = `document:${document.id}`;
-      option.textContent = document.display_name;
+      option.value = `document:${doc.id}`;
+      option.textContent = doc.display_name;
       documentGroup.appendChild(option);
     }
     elements.scopeSelect.appendChild(documentGroup);
@@ -163,20 +163,20 @@ function refreshProjectOptions() {
 }
 
 function renderJobs() {
-  const documents = [...state.documents];
-  elements.jobsEmpty.hidden = documents.length > 0;
+  const docs = [...state.documents];
+  elements.jobsEmpty.hidden = docs.length > 0;
   elements.jobsList.innerHTML = "";
 
-  for (const document of documents) {
-    const latestJob = document.latest_job || null;
+  for (const doc of docs) {
+    const latestJob = doc.latest_job || null;
     const status = statusClass(latestJob?.status || "pending");
     const [queued, processing, indexed] = jobStageFlags(status);
     const stats = latestJob?.payload?.stats || {};
-    const createdAt = document.created_at || latestJob?.created_at || null;
+    const createdAt = doc.created_at || latestJob?.created_at || null;
     const metaLine = createdAt ? new Date(createdAt).toLocaleString() : "No timestamps yet";
-    const details = [document.title, document.year, document.type].filter(Boolean).join(" | ") || "Metadata will appear here after processing completes.";
-    const projectLabel = document.project_name || "Unassigned";
-    const projectClass = document.project_name ? "" : "unassigned";
+    const details = [doc.title, doc.year, doc.type].filter(Boolean).join(" | ") || "Metadata will appear here after processing completes.";
+    const projectLabel = doc.project_name || "Unassigned";
+    const projectClass = doc.project_name ? "" : "unassigned";
     const isQueryable = status === "completed";
     const isBusy = ["pending", "running"].includes(status);
 
@@ -185,15 +185,15 @@ function renderJobs() {
     card.innerHTML = `
       <div class="job-topline">
         <div>
-          <p class="job-title">${escapeHtml(document.display_name)}</p>
+          <p class="job-title">${escapeHtml(doc.display_name)}</p>
           <div class="job-subline">
             <span class="project-chip ${projectClass}">${escapeHtml(projectLabel)}</span>
-            <span class="job-filename">${escapeHtml(document.filename)}</span>
+            <span class="job-filename">${escapeHtml(doc.filename)}</span>
           </div>
         </div>
         <span class="status-pill ${status}">${escapeHtml(status)}</span>
       </div>
-      <p class="job-meta">document ${escapeHtml(document.id)} | ${escapeHtml(metaLine)}</p>
+      <p class="job-meta">document ${escapeHtml(doc.id)} | ${escapeHtml(metaLine)}</p>
       <p class="helper">${escapeHtml(details)}</p>
       <div class="job-progress">
         <div class="progress-step ${queued}">Queued in backend</div>
@@ -226,7 +226,7 @@ function renderJobs() {
     `;
 
     card.querySelector(".query-button")?.addEventListener("click", () => {
-      setScopeValue("document", document.id);
+      setScopeValue("document", doc.id);
       if (elements.queryInput.value.trim()) {
         runSearch().catch(console.error);
       } else {
@@ -235,14 +235,14 @@ function renderJobs() {
     });
 
     card.querySelector(".delete-button")?.addEventListener("click", () => {
-      handleDeleteDocument(document);
+      handleDeleteDocument(doc);
     });
 
     card.querySelector(".project-form")?.addEventListener("submit", (event) => {
       event.preventDefault();
       const form = event.currentTarget;
       const input = form.querySelector('input[name="project_name"]');
-      updateDocumentProject(document.id, input.value);
+      updateDocumentProject(doc.id, input.value);
     });
 
     elements.jobsList.appendChild(card);
@@ -250,13 +250,13 @@ function renderJobs() {
 
   refreshProjectOptions();
 
-  const hasError = documents.some((document) => document.latest_job?.status === "failed");
-  const isWorking = documents.some((document) => ["pending", "running"].includes(document.latest_job?.status));
+  const hasError = docs.some((doc) => doc.latest_job?.status === "failed");
+  const isWorking = docs.some((doc) => ["pending", "running"].includes(doc.latest_job?.status));
   if (hasError) {
     setSignal("error", "One or more documents failed");
   } else if (isWorking) {
     setSignal("live", "Pipeline active");
-  } else if (documents.length > 0) {
+  } else if (docs.length > 0) {
     setSignal("live", "Library ready");
   } else {
     setSignal("idle", "Backend idle");
