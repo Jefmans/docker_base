@@ -6,7 +6,9 @@ const state = {
   documents: [],
   searchResults: null,
   answerResult: null,
+  answerRun: null,
   libraryTimer: null,
+  answerPollTimer: null,
 };
 
 const elements = {
@@ -366,10 +368,32 @@ function renderResults() {
 }
 
 function renderAnswer() {
-  if (!state.answerResult) {
+  if (!state.answerResult && !state.answerRun) {
     elements.answerEmpty.hidden = false;
     elements.answerOutput.hidden = true;
     elements.answerOutput.innerHTML = "";
+    return;
+  }
+
+  if (state.answerRun && state.answerRun.status !== "completed") {
+    const scope = state.answerRun.scope || { mode: "all" };
+    elements.answerEmpty.hidden = true;
+    elements.answerOutput.hidden = false;
+    elements.answerOutput.innerHTML = `
+      <article class="answer-card">
+        <div class="answer-header">
+          <div>
+            <h3 class="answer-title">${escapeHtml(state.answerRun.query || "Building answer")}</h3>
+            <p class="helper">The research tree is running in the backend. This view will update automatically.</p>
+          </div>
+          <div class="answer-meta">
+            <span class="metadata-chip">${escapeHtml(humanScopeLabel(scope))}</span>
+            <span class="metadata-chip">status ${escapeHtml(state.answerRun.status || "pending")}</span>
+            <span class="metadata-chip">session ${escapeHtml(state.answerRun.session_id || "")}</span>
+          </div>
+        </div>
+      </article>
+    `;
     return;
   }
 
@@ -401,6 +425,44 @@ function renderAnswer() {
       <pre class="answer-article">${escapeHtml(article)}</pre>
     </article>
   `;
+}
+
+function scheduleAnswerPoll(sessionId, delayMs = 2500) {
+  if (state.answerPollTimer) {
+    window.clearTimeout(state.answerPollTimer);
+  }
+  state.answerPollTimer = window.setTimeout(() => {
+    pollAnswerRun(sessionId).catch(console.error);
+  }, delayMs);
+}
+
+async function pollAnswerRun(sessionId) {
+  try {
+    const payload = await fetchJson(`agent/answer_runs/${sessionId}`);
+    state.answerRun = payload;
+    if (payload.status === "completed" && payload.result) {
+      state.answerResult = payload.result;
+      renderAnswer();
+      elements.answerHelper.textContent = "Structured answer generated successfully.";
+      setSignal("live", "Answer built");
+      return;
+    }
+
+    if (payload.status === "failed") {
+      state.answerResult = null;
+      renderAnswer();
+      elements.answerHelper.textContent = payload.error || "Answer generation failed";
+      setSignal("error", payload.error || "Answer generation failed");
+      return;
+    }
+
+    renderAnswer();
+    scheduleAnswerPoll(sessionId);
+  } catch (error) {
+    console.error(error);
+    elements.answerHelper.textContent = error.message;
+    setSignal("error", error.message);
+  }
 }
 
 async function fetchJson(path, options = {}) {
@@ -523,7 +585,14 @@ async function handleDeleteDocument(document) {
     state.searchResults = null;
     if (state.answerResult?.scope?.mode === "document" && state.answerResult.scope.document_id === document.id) {
       state.answerResult = null;
-      renderAnswer();
+    }
+    if (state.answerRun?.scope?.mode === "document" && state.answerRun.scope.document_id === document.id) {
+      state.answerRun = null;
+    }
+    renderAnswer();
+    if (state.answerPollTimer) {
+      window.clearTimeout(state.answerPollTimer);
+      state.answerPollTimer = null;
     }
     renderResults();
     await loadLibrary();
@@ -599,19 +668,22 @@ async function runBuildAnswer() {
   elements.answerHelper.textContent = `Running research tree over ${humanScopeLabel(scope)}. This can take a while.`;
 
   try {
-    state.answerResult = await fetchJson("agent/full_run", {
+    const startPayload = await fetchJson("agent/answer_runs", {
       method: "POST",
       headers: {
         "Content-Type": "application/json",
       },
       body: JSON.stringify(payload),
     });
+    state.answerResult = null;
+    state.answerRun = startPayload;
     renderAnswer();
-    setSignal("live", "Answer built");
-    elements.answerHelper.textContent = "Structured answer generated successfully.";
+    setSignal("live", "Answer queued");
+    scheduleAnswerPoll(startPayload.session_id, 1000);
   } catch (error) {
     console.error(error);
     state.answerResult = null;
+    state.answerRun = null;
     renderAnswer();
     elements.answerHelper.textContent = error.message;
     setSignal("error", error.message);

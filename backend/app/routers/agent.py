@@ -1,4 +1,4 @@
-from fastapi import APIRouter, HTTPException
+from fastapi import APIRouter, BackgroundTasks, HTTPException
 from fastapi.responses import JSONResponse, Response
 from uuid import uuid4
 from pydantic import BaseModel
@@ -12,6 +12,7 @@ from app.utils.agent.expander import enrich_node_with_chunks_and_subquestions, c
 from app.utils.agent.repo import upsert_questions, attach_questions_to_node, update_node_fields, get_node_chunks, upsert_chunks, attach_chunks_to_node, get_node_questions
 from app.utils.agent.router_utils import choose_best_node_for_question, get_top_level_section_or_400, _filter_structural_sections
 from app.utils.document_scope import resolve_research_scope
+from app.utils.agent.answer_runs import create_answer_run, get_answer_run, update_answer_run
 import hashlib
 from app.db.db import SessionLocal 
 from app.repositories.research_tree_repo import ResearchTreeRepository
@@ -46,6 +47,165 @@ def _resolve_scope_or_400(db, request: AgentQueryRequest):
     if scope.mode == "project" and not scope.filenames:
         raise HTTPException(status_code=400, detail="Selected project has no documents")
     return scope
+
+
+def _run_full_agent_pipeline(request: AgentQueryRequest, *, session_id: str | None = None) -> dict:
+    db = SessionLocal()
+    try:
+        scope = _resolve_scope_or_400(db, request)
+    finally:
+        db.close()
+
+    active_session_id = session_id or str(uuid4())
+    user_query = request.query
+    top_chunks = search_chunks(user_query, top_k=request.top_k, scope=scope)
+
+    root_node = ResearchNode(title=request.query)
+    tree = ResearchTree(query=user_query, root_node=root_node, scope=scope)
+
+    db = SessionLocal()
+    try:
+        repo = ResearchTreeRepository(db)
+        repo.save(tree, active_session_id)
+
+        chunk_dicts = [{
+            "id": hashlib.sha1(c.encode("utf-8")).hexdigest(),
+            "text": c,
+            "page": None,
+            "source": None
+        } for c in top_chunks]
+        upsert_chunks(db, chunk_dicts)
+        attach_chunks_to_node(db, tree.root_node.id, [c["id"] for c in chunk_dicts])
+        db.commit()
+    finally:
+        db.close()
+
+    db = SessionLocal()
+    try:
+        repo = ResearchTreeRepository(db)
+        tree_for_subq = repo.load(active_session_id)
+        root_chunks_text = [c.text for c in tree_for_subq.root_node.chunks]
+    finally:
+        db.close()
+
+    subq = generate_subquestions_from_chunks(root_chunks_text, user_query)
+
+    db = SessionLocal()
+    try:
+        repo = ResearchTreeRepository(db)
+        tree_for_outline = repo.load(active_session_id)
+    finally:
+        db.close()
+
+    outline = generate_outline_from_tree(tree_for_outline)
+    filtered_sections = _filter_structural_sections(outline.sections)
+
+    if not filtered_sections:
+        from app.models.outline_model import OutlineSection
+        filtered_sections = [OutlineSection(heading="Main Discussion", goals=None, questions=[], subsections=[])]
+
+    db = SessionLocal()
+    try:
+        repo = ResearchTreeRepository(db)
+        tree = repo.load(active_session_id)
+
+        tree.root_node.subnodes = [node_from_outline_section(s) for s in filtered_sections]
+        if outline.title:
+            tree.root_node.title = outline.title
+        tree.assign_rank_and_level()
+        repo.save(tree, active_session_id)
+
+        def _attach_all(section, node):
+            if getattr(section, "questions", None):
+                qids = upsert_questions(db, section.questions, source="outline")
+                attach_questions_to_node(db, node.id, qids)
+            for ssub, nsub in zip(section.subsections or [], node.subnodes or []):
+                _attach_all(ssub, nsub)
+
+        for s, n in zip(filtered_sections, tree.root_node.subnodes):
+            _attach_all(s, n)
+
+        if subq:
+            qids = upsert_questions(db, subq, source="root_subq")
+            for qid, qtext in zip(qids, subq):
+                best = choose_best_node_for_question(db, qtext, tree)
+                attach_questions_to_node(db, best.id, [qid])
+
+        db.commit()
+    finally:
+        db.close()
+
+    from app.utils.agent.expander import process_node_recursively
+    section_outputs = []
+    db = SessionLocal()
+    try:
+        repo = ResearchTreeRepository(db)
+        tree = repo.load(active_session_id)
+
+        for node in tree.root_node.subnodes:
+            process_node_recursively(node, tree, top_k=10)
+
+        tree = repo.load(active_session_id)
+
+        def collect(n):
+            out = [{"heading": n.title, "text": n.content or ""}]
+            for c in n.subnodes:
+                out.extend(collect(c))
+            return out
+
+        for n in tree.root_node.subnodes:
+            section_outputs.extend(collect(n))
+
+        db.commit()
+    finally:
+        db.close()
+
+    from app.utils.agent.writer import write_executive_summary, write_overall_conclusion
+    db = SessionLocal()
+    try:
+        repo = ResearchTreeRepository(db)
+        tree = repo.load(active_session_id)
+
+        exec_summary = write_executive_summary(tree)
+        overall_concl = write_overall_conclusion(tree)
+
+        update_node_fields(
+            db,
+            tree.root_node.id,
+            summary=exec_summary,
+            conclusion=overall_concl,
+            is_final=True,
+        )
+        db.commit()
+    finally:
+        db.close()
+
+    db = SessionLocal()
+    try:
+        repo = ResearchTreeRepository(db)
+        tree = repo.load(active_session_id)
+        article = finalize_article_from_tree(tree)
+    finally:
+        db.close()
+
+    return {
+        "session_id": active_session_id,
+        "title": tree.root_node.title or user_query,
+        "abstract": tree.root_node.content or "",
+        "scope": tree.scope.model_dump(),
+        "outline": [s.dict() for s in filtered_sections],
+        "sections": section_outputs,
+        "article": article
+    }
+
+
+def _run_answer_job(session_id: str, request: AgentQueryRequest) -> None:
+    try:
+        update_answer_run(session_id, status="running")
+        result = _run_full_agent_pipeline(request, session_id=session_id)
+        update_answer_run(session_id, status="completed", result=result)
+    except Exception as exc:
+        update_answer_run(session_id, status="failed", error=str(exc))
     
 
 
@@ -384,171 +544,39 @@ def complete_section(session_id: str, section_id: int):
 @router.post("/agent/full_run")
 def full_run(request: AgentQueryRequest):
     try:
-        db = SessionLocal()
-        try:
-            scope = _resolve_scope_or_400(db, request)
-        finally:
-            db.close()
-
-        # STEP 1: create session + persist root node in DB
-        session_id = str(uuid4())
-        user_query = request.query
-        top_chunks = search_chunks(user_query, top_k=request.top_k, scope=scope)
-
-        root_node = ResearchNode(title=request.query)
-        tree = ResearchTree(query=user_query, root_node=root_node, scope=scope)
-
-        db = SessionLocal()
-        try:
-            repo = ResearchTreeRepository(db)
-            repo.save(tree, session_id)
-
-            # upsert initial chunks and attach to root
-            chunk_dicts = [{
-                "id": hashlib.sha1(c.encode("utf-8")).hexdigest(),
-                "text": c,
-                "page": None,
-                "source": None
-            } for c in top_chunks]
-            upsert_chunks(db, chunk_dicts)
-            attach_chunks_to_node(db, tree.root_node.id, [c["id"] for c in chunk_dicts])
-            db.commit()
-        finally:
-            db.close()
-
-        # STEP 2: subquestions + outline (apply FILTERED sections consistently)
-        db = SessionLocal()
-        try:
-            repo = ResearchTreeRepository(db)
-            tree_for_subq = repo.load(session_id)
-            root_chunks_text = [c.text for c in tree_for_subq.root_node.chunks]
-        finally:
-            db.close()
-
-        subq = generate_subquestions_from_chunks(root_chunks_text, user_query)
-
-        db = SessionLocal()
-        try:
-            repo = ResearchTreeRepository(db)
-            tree_for_outline = repo.load(session_id)
-        finally:
-            db.close()
-
-        outline = generate_outline_from_tree(tree_for_outline)
-        filtered_sections = _filter_structural_sections(outline.sections)
-
-        if not filtered_sections:
-            from app.models.outline_model import OutlineSection
-            filtered_sections = [OutlineSection(heading="Main Discussion", goals=None, questions=[], subsections=[])]
-
-
-        # Apply outline to DB-backed tree
-        db = SessionLocal()
-        try:
-            repo = ResearchTreeRepository(db)
-            tree = repo.load(session_id)  # ensure ORM ids
-
-            # Build nodes from *filtered* outline only
-            tree.root_node.subnodes = [node_from_outline_section(s) for s in filtered_sections]
-            if outline.title:
-                tree.root_node.title = outline.title
-            tree.assign_rank_and_level()
-            repo.save(tree, session_id)
-
-            # Attach outline questions matching the filtered sections
-            from app.utils.agent.repo import upsert_questions, attach_questions_to_node
-
-            def _attach_all(section, node):
-                if getattr(section, "questions", None):
-                    qids = upsert_questions(db, section.questions, source="outline")
-                    attach_questions_to_node(db, node.id, qids)
-                for ssub, nsub in zip(section.subsections or [], node.subnodes or []):
-                    _attach_all(ssub, nsub)
-
-            for s, n in zip(filtered_sections, tree.root_node.subnodes):
-                _attach_all(s, n)
-
-            # (Optional) Also persist root-level subquestions as "root_subq"
-            if subq:
-                qids = upsert_questions(db, subq, source="root_subq")
-                # naive routing: attach to the best top-level node
-                from app.utils.agent.router_utils import choose_best_node_for_question
-                for qid, qtext in zip(qids, subq):
-                    best = choose_best_node_for_question(db, qtext, tree)
-                    attach_questions_to_node(db, best.id, [qid])
-
-            db.commit()
-        finally:
-            db.close()
-
-        # STEP 3: process every top-level section recursively (enrich -> maybe deepen -> write)
-        from app.utils.agent.expander import process_node_recursively
-        section_outputs = []
-        db = SessionLocal()
-        try:
-            repo = ResearchTreeRepository(db)
-            tree = repo.load(session_id)
-
-            for node in tree.root_node.subnodes:
-                process_node_recursively(node, tree, top_k=10)
-
-            # reload again to reflect all writes from recursion
-            tree = repo.load(session_id)
-
-            def collect(n):
-                out = [{"heading": n.title, "text": n.content or ""}]
-                for c in n.subnodes:
-                    out.extend(collect(c))
-                return out
-
-            for n in tree.root_node.subnodes:
-                section_outputs.extend(collect(n))
-
-            db.commit()
-        finally:
-            db.close()
-
-        # STEP 4: executive summary + overall conclusion on root, persist
-        from app.utils.agent.writer import write_executive_summary, write_overall_conclusion
-        db = SessionLocal()
-        try:
-            repo = ResearchTreeRepository(db)
-            tree = repo.load(session_id)
-
-            exec_summary = write_executive_summary(tree)
-            overall_concl = write_overall_conclusion(tree)
-
-            # store on root node and persist
-            from app.utils.agent.repo import update_node_fields
-            update_node_fields(db, tree.root_node.id,
-                               summary=exec_summary,
-                               conclusion=overall_concl,
-                               is_final=True)
-            db.commit()
-        finally:
-            db.close()
-
-        # STEP 5: final synthesis
-        db = SessionLocal()
-        try:
-            repo = ResearchTreeRepository(db)
-            tree = repo.load(session_id)
-            article = finalize_article_from_tree(tree)
-        finally:
-            db.close()
-
-        return {
-            "session_id": session_id,
-            "title": tree.root_node.title or user_query,
-            "abstract": tree.root_node.content or "",
-            "scope": tree.scope.model_dump(),
-            "outline": [s.dict() for s in filtered_sections],
-            "sections": section_outputs,
-            "article": article
-        }
-
+        return _run_full_agent_pipeline(request)
     except Exception as e:
         raise HTTPException(status_code=500, detail=str(e))
+
+
+@router.post("/agent/answer_runs")
+def start_answer_run(request: AgentQueryRequest, background_tasks: BackgroundTasks):
+    db = SessionLocal()
+    try:
+        scope = _resolve_scope_or_400(db, request)
+    finally:
+        db.close()
+
+    session_id = str(uuid4())
+    create_answer_run(
+        session_id,
+        query=request.query,
+        scope=scope.model_dump(),
+    )
+    background_tasks.add_task(_run_answer_job, session_id, request)
+    return {
+        "session_id": session_id,
+        "status": "pending",
+        "scope": scope.model_dump(),
+    }
+
+
+@router.get("/agent/answer_runs/{session_id}")
+def answer_run_status(session_id: str):
+    payload = get_answer_run(session_id)
+    if payload is None:
+        raise HTTPException(status_code=404, detail="Answer run not found")
+    return payload
 
 
 

@@ -57,8 +57,10 @@ class ResearchTreeRepository:
         if sess is None:
             self.db.add(SessionModel(id=session_id, query=tree.query, tree={"scope": tree.scope.model_dump()}))
         else:
+            payload = dict(sess.tree or {})
+            payload["scope"] = tree.scope.model_dump()
             sess.query = tree.query
-            sess.tree = {"scope": tree.scope.model_dump()}
+            sess.tree = payload
 
         _upsert(tree.root_node, parent_id=None)
         self.db.commit()
