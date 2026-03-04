@@ -63,6 +63,9 @@ def write_section(
             - If the evidence is limited, stay concise instead of padding.
             - If the evidence is rich and multi-faceted, cover the distinct angles clearly.
             - Be accurate and neutral.
+            - Treat idiomatic, literary, dialectal, archaic, or figurative expressions carefully.
+            - Do not force a modern literal interpretation unless the surrounding context clearly supports it.
+            - If a phrase is ambiguous, acknowledge the ambiguity instead of making an unsupported claim.
             - No extra headings; just the prose.
             """
         ).strip()
@@ -110,6 +113,7 @@ def write_summary(node: ResearchNode, *, context_chunk_limit: int = 12) -> str:
         {context}
 
         The summary should extract the main findings only.
+        Preserve ambiguity where the evidence is linguistically uncertain.
         """
     ).strip()
     logger.info("Writing summary for '%s' context_chars=%s", node.title, len(context))
@@ -142,6 +146,7 @@ def write_conclusion(node: ResearchNode, *, context_chunk_limit: int = 12) -> st
         {context}
 
         The conclusion should reflect on implications, limitations, or takeaways without repeating the full section.
+        Preserve ambiguity where the evidence is linguistically uncertain.
         """
     ).strip()
     logger.info("Writing conclusion for '%s' context_chars=%s", node.title, len(context))
@@ -168,6 +173,7 @@ def write_executive_summary(tree: ResearchTree) -> str:
         You are a scientific writer. Draft an Executive Summary of the article below.
         Target {sentence_hint}. Match the actual breadth of the material instead of forcing a fixed size.
         Be accurate, synthetic, and non-repetitive. Avoid headings.
+        Do not turn ambiguous or possibly idiomatic source language into confident literal claims.
 
         ARTICLE TITLE:
         {tree.root_node.title}
@@ -210,6 +216,7 @@ def write_overall_conclusion(tree: ResearchTree) -> str:
         Target about {paragraph_hint}. Match the scope of the evidence instead of forcing a generic ending.
         Synthesize the main insights and limitations, and point to future directions when supported.
         Avoid new claims not grounded in the findings.
+        Preserve ambiguity where the underlying language may be idiomatic, literary, dialectal, or archaic.
 
         TITLE:
         {tree.root_node.title}

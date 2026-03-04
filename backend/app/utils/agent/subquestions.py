@@ -33,6 +33,9 @@ def generate_subquestions_from_chunks(
             Broad or multi-document evidence can justify more.
 
             Only ask questions that are grounded in the context. Avoid filler and duplicates.
+            Treat idiomatic, literary, dialectal, archaic, or figurative expressions carefully.
+            Do not force a modern literal interpretation if the surrounding context does not clearly support it.
+            If a phrase is ambiguous, prefer a subquestion that tests or clarifies the ambiguity instead of assuming one meaning.
             Return your result using this format:
             {format_instructions}
 

@@ -36,6 +36,9 @@ def generate_outline_from_tree(tree: ResearchTree) -> Outline:
             Use fewer sections if the evidence is narrow.
             Use more only if the evidence truly supports it.
             Keep each section to at most {max_subsections} subsections.
+            Treat idiomatic, literary, dialectal, archaic, or figurative expressions carefully.
+            Do not build sections around an unverified literal interpretation.
+            If the meaning of a phrase is ambiguous, preserve that ambiguity in the outline instead of resolving it prematurely.
 
             MAIN QUESTION:
             {query}
