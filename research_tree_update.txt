@@ -169,44 +169,64 @@ WHAT HAS BEEN FIXED ALREADY
    - The pipeline is no longer supposed to use one near-constant budget for
      every question
 
+8. Node refinement is now partially evidence-aware
+   - Files:
+     backend/app/utils/agent/controller.py
+     backend/app/utils/agent/expander.py
+   - Nodes now build a local evidence profile from retrieved chunks
+   - That profile now influences:
+     a) section context size
+     b) per-node subquestion target
+     c) section length hint
+     d) whether a node should even attempt to deepen
+   - This is the first implementation slice of the Research Tree V2 direction
+
 
 CURRENT WEAKNESSES
 ------------------
-1. The adaptive planner is heuristic-based, not evidence-scored yet
+1. The top-level planner is still heuristic-based
    - File: backend/app/utils/agent/planning.py
-   - The tree now adapts to query/scope breadth, but it still does not inspect
+   - The tree now adapts to query/scope breadth, and nodes now react to local
+     evidence density, but the run-level planner still does not inspect
      retrieval scores or source diversity deeply enough
 
-2. Helper layers still open their own DB sessions during recursive processing
+2. The controller still does not prune, merge, or split sections
    - Files:
-     backend/app/utils/agent/expander.py
      backend/app/utils/agent/controller.py
-     backend/app/utils/agent/writer.py
+     backend/app/utils/agent/expander.py
+   - We now have local evidence-aware execution, but not yet the full bounded
+     refinement loop with overlap reduction and consolidation
+
+3. Helper layers still open their own DB sessions during recursive processing
+   - Files:
+      backend/app/utils/agent/expander.py
+      backend/app/utils/agent/controller.py
+      backend/app/utils/agent/writer.py
    - full_run is leaner now, but the recursive pipeline still hides a lot of
      DB traffic behind helper calls
 
-3. The pipeline mixes orchestration, persistence, and LLM logic in one large router file
+4. The pipeline mixes orchestration, persistence, and LLM logic in one large router file
    - File: backend/app/routers/agent.py
    - This should eventually become a service layer
 
-4. Root abstract handling is weak
+5. Root abstract handling is weak
    - The returned abstract often comes from root_node.content
    - But root content is not clearly produced as a true abstract stage
 
-5. Summary and conclusion generation are too similar
+6. Summary and conclusion generation are too similar
    - File: backend/app/utils/agent/writer.py
    - write_summary() and write_conclusion() are almost the same in structure
    - They should become clearly separate writing goals
 
-6. Initial root chunks lose metadata
+7. Initial root chunks lose metadata
    - Initial chunks are stored with page=None and source=None
    - This loses provenance that was available in vector retrieval
 
-7. Tree persistence is append/update oriented, not fully pruning old branches
+8. Tree persistence is append/update oriented, not fully pruning old branches
    - File: backend/app/repositories/research_tree_repo.py
    - This can leave stale nodes if a structure changes significantly
 
-8. full_run still reopens sessions around major phases
+9. full_run still reopens sessions around major phases
    - File: backend/app/routers/agent.py
    - The worst repeated tree reloads are gone, but there are still separate
      sessions for the setup, outline persistence, and root finalization phases
@@ -249,33 +269,171 @@ Phase 6: Optional product improvements
 3. Add export options directly from Build Answer results
 
 
+RESEARCH TREE V2 DIRECTION
+--------------------------
+The agreed next architecture is not a global restart loop.
+
+The tree should evolve toward a bounded local refinement loop per node or subtree.
+
+The intended shape is:
+
+1. Scope
+   - Decide what corpus is allowed
+   - One PDF, one project, or all documents
+
+2. Run policy
+   - Decide overall ambition, budget, and max depth
+   - Keep this smaller than the current flat ResearchPlan
+   - This is strategy, not per-node execution
+
+3. Seed tree
+   - Query -> root chunks -> root questions -> draft outline
+   - This creates the first usable structure
+
+4. Local refinement loop
+   - For each node:
+     a) retrieve chunks
+     b) generate follow-up questions
+     c) retrieve again if justified
+     d) score evidence quality
+     e) prune weak chunks and irrelevant questions
+     f) decide stop / deepen / merge / split
+   - This loop should be local to the node or subtree
+   - It should not restart the whole tree
+
+5. Global consolidation
+   - Remove overlap between sibling sections
+   - Merge thin or duplicate sections
+   - Rebalance the outline once if needed
+   - Avoid repeated whole-tree rebuilds
+
+6. Writing
+   - Write sections only after the node or subtree is stable enough
+   - Then synthesize executive summary and overall conclusion
+
+
+WHY THIS DIRECTION
+------------------
+This should make the system:
+
+1. More intelligent
+   - Different sibling nodes can behave differently based on their own evidence
+
+2. More stable
+   - No expensive and noisy global restart cycle after every local change
+
+3. Easier to reason about
+   - Top level owns strategy
+   - Lower levels own execution decisions
+
+4. Easier to control
+   - The loop can stop when a node is good enough instead of always expanding
+
+
+NON-GOAL
+--------
+Do not build a blind global loop like:
+
+query -> chunks -> questions -> chunks -> outline cleanup -> restart everything
+
+That would likely cause:
+- cost blowups
+- unstable outlines
+- repeated churn in the persisted tree
+- harder debugging
+
+
+TARGET CONTROL RULES
+--------------------
+The future controller should use explicit stop conditions.
+
+Examples:
+
+1. No sufficiently novel questions
+2. No materially new chunks from another retrieval pass
+3. Evidence overlap too high with sibling nodes
+4. Coverage is already good enough for the node
+5. Budget exhausted for that node
+6. Max node iterations reached
+
+This should be implemented as a bounded refinement controller, not an open-ended loop.
+
+
+PARAMETER OWNERSHIP DIRECTION
+-----------------------------
+Some current flat ResearchPlan parameters should move lower in the system.
+
+Keep at run-policy level:
+- scope
+- overall budget level
+- desired depth
+- evidence profile
+- query complexity
+
+Keep at phase level:
+- root_top_k
+- root_context_chunks
+- root_subquestion_target
+- outline_target_sections
+- outline_max_subsections
+- summary_context_sections
+
+Move to node-level execution logic:
+- section_top_k
+- section_context_chunks
+- section_subquestion_target
+- section_length_hint
+- min_novel_questions_to_deepen
+
+Reason:
+- these are better decided per node from actual evidence, not once globally
+
+
+V2 CONTROLLER IDEA
+------------------
+The controller should become the main owner of local refinement decisions.
+
+High-level responsibilities:
+
+1. Evaluate node evidence quality
+2. Decide whether to deepen
+3. Detect overlap with sibling sections
+4. Detect redundant or irrelevant questions
+5. Decide whether a node should stop, deepen, split, or merge
+
+This suggests evolving backend/app/utils/agent/controller.py into a real refinement controller,
+while keeping backend/app/utils/agent/expander.py focused on executing one node iteration.
+
+
 NEXT RECOMMENDED CHANGE
 -----------------------
 The next best cleanup step is:
 
-Make the adaptive planner evidence-aware
+Add explicit prune / merge / split decisions to the local refinement controller
 
 Why this is next:
-- the tree now adapts to query/scope breadth, but not yet strongly enough to
-  source diversity and retrieval quality
-- better evidence-awareness should make article size and branching feel less generic
-- after that, pushing DB session ownership down the stack will be cleaner
+- the first evidence-aware node execution slice now exists
+- the next missing capability is structural cleanup, not just per-node budgets
+- this is what will move the tree closer to the intended bounded local refinement loop
 
 Expected effect:
-- better variation in article size, branching, and section depth
-- fewer generic same-sized answers across very different scopes
-- a stronger base for later transaction cleanup
+- fewer repeated or weak branches
+- less overlap between sibling sections
+- less unnecessary deepening
+- a stronger base for later transaction and session cleanup
 
 
 ACCEPTANCE CRITERIA FOR THE NEXT STEP
 -------------------------------------
 When the session/reload cleanup is done:
 
-1. the planner should react not only to query text but also to retrieved evidence shape
-2. The logic should remain transactionally correct
-3. full_run should still work end-to-end
-4. start_answer_run / polling flow should still work
-5. Tree exports should still load the correct persisted state
+1. the controller should react not only to query text but also to retrieved evidence shape
+2. the controller should be able to prune, merge, or skip weak branches locally
+3. local node refinement should not require whole-tree restart cycles
+4. The logic should remain transactionally correct
+5. full_run should still work end-to-end
+6. start_answer_run / polling flow should still work
+7. Tree exports should still load the correct persisted state
 
 
 NOTES FOR FUTURE CHANGES
@@ -299,3 +457,5 @@ CHANGE LOG
 - Reduced full_run tree reloads by keeping the working tree in memory longer
 - Added live research-tree visibility in the frontend during Build Answer runs
 - Added adaptive research planning so tree size and writing budgets vary by query and scope
+- Recorded the agreed Research Tree V2 direction: bounded local refinement loop, not full-tree restart loops
+- Added the first evidence-aware controller slice so node budgets and deepening gates now react to local chunk density
