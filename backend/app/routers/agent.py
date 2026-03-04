@@ -16,7 +16,7 @@ from app.utils.document_scope import resolve_research_scope
 from app.utils.agent.answer_runs import create_answer_run, get_answer_run, update_answer_run
 from app.utils.agent.planning import build_research_plan
 import hashlib
-from app.db.db import SessionLocal 
+from app.db.db import SessionLocal, Session as SessionRecord
 from app.repositories.research_tree_repo import ResearchTreeRepository
 from app.renderers.article_renderer import ArticleRenderer
 from app.mappers.outline_to_tree import node_from_outline_section
@@ -615,10 +615,48 @@ def answer_run_status(session_id: str):
 @router.get("/agent/tree/{session_id}")
 def get_tree(session_id: str):
     db = SessionLocal()
-    repo = ResearchTreeRepository(db)
-    tree = repo.load(session_id)
-    db.close()
-    return JSONResponse(content=tree.model_dump_jsonable())
+    try:
+        repo = ResearchTreeRepository(db)
+        try:
+            tree = repo.load(session_id)
+            return JSONResponse(content=tree.model_dump_jsonable())
+        except ValueError as exc:
+            session_row = db.query(SessionRecord).filter(SessionRecord.id == session_id).first()
+            if session_row is None:
+                raise HTTPException(status_code=404, detail="Tree not found") from exc
+
+            if str(exc) != "No root node found":
+                raise HTTPException(status_code=500, detail=str(exc)) from exc
+
+            payload = dict(session_row.tree or {})
+            return JSONResponse(
+                content={
+                    "status": "pending",
+                    "query": session_row.query,
+                    "scope": dict(payload.get("scope") or {}),
+                    "plan": dict(payload.get("plan") or {}),
+                    "root_node": {
+                        "title": session_row.query or "Research tree",
+                        "rank": 1,
+                        "level": 1,
+                        "parent_rank": None,
+                        "parent_level": None,
+                        "display_rank": "1",
+                        "questions": [],
+                        "chunks": [],
+                        "chunk_ids": [],
+                        "content": None,
+                        "summary": None,
+                        "conclusion": None,
+                        "is_final": False,
+                        "subnodes": [],
+                    },
+                    "used_questions": [],
+                    "used_chunk_ids": [],
+                }
+            )
+    finally:
+        db.close()
 
 
 

@@ -463,6 +463,19 @@ function renderTreeNode(node) {
   const questionCount = node.questions?.length || 0;
   const chunkCount = node.chunks?.length || 0;
   const children = node.subnodes || [];
+  const questionBlock =
+    questionCount > 0
+      ? `
+        <details class="tree-question-block" ${questionCount <= 3 ? "open" : ""}>
+          <summary>Questions (${escapeHtml(questionCount)})</summary>
+          <ul class="tree-question-list">
+            ${node.questions
+              .map((question) => `<li class="tree-question-item">${escapeHtml(question)}</li>`)
+              .join("")}
+          </ul>
+        </details>
+      `
+      : "";
 
   return `
     <li class="tree-node">
@@ -477,6 +490,7 @@ function renderTreeNode(node) {
           </div>
         </div>
         <p class="tree-node-snippet">${escapeHtml(summarizeNode(node))}</p>
+        ${questionBlock}
         ${
           children.length > 0
             ? `<ul class="tree-children">${children.map((child) => renderTreeNode(child)).join("")}</ul>`
@@ -518,7 +532,7 @@ function renderAnswerTree() {
         ${
           topNodes.length > 0
             ? topNodes.map((node) => renderTreeNode(node)).join("")
-            : `<li class="tree-node"><article class="tree-node-body"><p class="tree-node-snippet">Root created. Waiting for outline sections.</p></article></li>`
+            : renderTreeNode(root)
         }
       </ul>
     </article>

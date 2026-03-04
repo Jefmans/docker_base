@@ -655,6 +655,48 @@ input[type="file"]:focus {
   line-height: 1.55;
 }
 
+.tree-question-block {
+  border-top: 1px solid rgba(23, 32, 51, 0.08);
+  padding-top: 8px;
+}
+
+.tree-question-block summary {
+  cursor: pointer;
+  font-size: 0.84rem;
+  font-weight: 700;
+  color: var(--ink);
+  list-style: none;
+}
+
+.tree-question-block summary::-webkit-details-marker {
+  display: none;
+}
+
+.tree-question-block summary::before {
+  content: "+";
+  display: inline-flex;
+  width: 18px;
+  justify-content: center;
+  margin-right: 6px;
+  color: var(--accent);
+}
+
+.tree-question-block[open] summary::before {
+  content: "-";
+}
+
+.tree-question-list {
+  margin: 10px 0 0;
+  padding-left: 18px;
+  display: grid;
+  gap: 8px;
+}
+
+.tree-question-item {
+  color: var(--muted);
+  line-height: 1.5;
+}
+
 .result-card p {
   margin: 0;
   line-height: 1.6;
