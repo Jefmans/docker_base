@@ -10,10 +10,22 @@ class QuestionStatus(str, enum.Enum):
     ASSIGNED = "assigned"
     CONSUMED = "consumed"
 
+
+def _question_status_values(enum_cls):
+    return [item.value for item in enum_cls]
+
 class QuestionORM(Base):
     __tablename__ = "questions"
 
     id = Column(UUID(as_uuid=True), primary_key=True, default=uuid4)
     text = Column(String, unique=True, index=True, nullable=False)  # dedup by text
     source = Column(String, nullable=False)  # e.g. "root_subq" | "outline" | "expansion"
-    status = Column(Enum(QuestionStatus), nullable=False, default=QuestionStatus.PROPOSED)
+    status = Column(
+        Enum(
+            QuestionStatus,
+            name="questionstatus",
+            values_callable=_question_status_values,
+        ),
+        nullable=False,
+        default=QuestionStatus.PROPOSED,
+    )

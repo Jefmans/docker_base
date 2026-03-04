@@ -15,13 +15,26 @@ class ProcessingJobStatus(str, Enum):
     FAILED = "failed"
 
 
+def _processing_job_status_values(enum_cls):
+    return [item.value for item in enum_cls]
+
+
 class ProcessingJob(Base):
     __tablename__ = "processing_jobs"
 
     id = Column(UUID(as_uuid=True), primary_key=True, default=uuid4)
     document_id = Column(UUID(as_uuid=True), ForeignKey("documents.id", ondelete="CASCADE"), index=True, nullable=False)
     job_type = Column(String, nullable=False, default="pdf_ingest")
-    status = Column(SqlEnum(ProcessingJobStatus), nullable=False, default=ProcessingJobStatus.PENDING, index=True)
+    status = Column(
+        SqlEnum(
+            ProcessingJobStatus,
+            name="processingjobstatus",
+            values_callable=_processing_job_status_values,
+        ),
+        nullable=False,
+        default=ProcessingJobStatus.PENDING,
+        index=True,
+    )
     attempt_count = Column(Integer, nullable=False, default=0)
     worker_name = Column(String, nullable=True)
     error_message = Column(Text, nullable=True)
