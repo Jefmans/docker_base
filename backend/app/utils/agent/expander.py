@@ -1,3 +1,5 @@
+import logging
+
 from app.utils.agent.search_chunks import search_chunks
 from app.utils.agent.subquestions import generate_subquestions_from_chunks
 from app.models.research_tree import ResearchNode, ResearchTree, Chunk, ResearchScope
@@ -17,6 +19,9 @@ from sqlalchemy import select
 from app.db.models.question_orm import QuestionORM
 
 
+logger = logging.getLogger(__name__)
+
+
 def stable_chunk_id(text: str, meta_id: str | None = None) -> str:
     return meta_id or hashlib.sha1(text.encode("utf-8")).hexdigest()
 
@@ -26,8 +31,16 @@ def enrich_node_with_chunks_and_subquestions(node: ResearchNode, tree: ResearchT
     queries = [node.title] + getattr(node, "questions", [])
     combined_query = " ".join(q for q in queries if q).strip() or node.title
     retrieval_top_k = top_k or node_retrieval_top_k(tree.plan, node)
+    logger.info(
+        "Enriching node '%s' level=%s retrieval_top_k=%s question_count=%s",
+        node.title,
+        node.level,
+        retrieval_top_k,
+        len(getattr(node, "questions", [])),
+    )
 
     results = search_chunks(combined_query, top_k=retrieval_top_k, return_docs=True, scope=tree.scope)
+    logger.info("Node '%s' retrieval returned %s docs", node.title, len(results))
 
     chunk_dicts = []
     for doc in results:
@@ -59,6 +72,12 @@ def enrich_node_with_chunks_and_subquestions(node: ResearchNode, tree: ResearchT
         )
         qids = upsert_questions(db, subqs, source="expansion")
         attach_questions_to_node(db, node.id, qids)
+        logger.info(
+            "Node '%s' attached %s chunks and generated %s expansion questions",
+            node.title,
+            len(chunk_dicts),
+            len(subqs),
+        )
 
         db.commit()
     finally:
@@ -96,12 +115,20 @@ def deepen_node_with_subquestions(
 def process_node_recursively(node: ResearchNode, tree: ResearchTree, top_k: int | None = None):
     retrieval_top_k = node_retrieval_top_k(tree.plan, node)
     context_chunk_limit = node_context_chunk_limit(tree.plan, node)
+    logger.info(
+        "Processing node '%s' level=%s subnodes=%s",
+        node.title,
+        node.level,
+        len(node.subnodes),
+    )
 
     # 1) Expand the node (chunks + new expansion questions)
     enrich_node_with_chunks_and_subquestions(node, tree, top_k=retrieval_top_k)
 
     # 2) Decide whether to deepen using DB-based novelty
-    if node_should_attempt_depth(tree.plan, node) and should_deepen_node(
+    should_attempt_depth = node_should_attempt_depth(tree.plan, node)
+    did_deepen = False
+    if should_attempt_depth and should_deepen_node(
         node,
         min_novel=tree.plan.min_novel_questions_to_deepen,
     ):
@@ -116,6 +143,20 @@ def process_node_recursively(node: ResearchNode, tree: ResearchTree, top_k: int 
 
         if novel_expansion:
             deepen_node_with_subquestions(node, novel_expansion, top_k=retrieval_top_k, scope=tree.scope)
+            did_deepen = True
+            logger.info(
+                "Node '%s' deepened with %s novel questions",
+                node.title,
+                len(novel_expansion),
+            )
+        else:
+            logger.info("Node '%s' had no novel expansion questions", node.title)
+    else:
+        logger.info(
+            "Node '%s' skipped deepening should_attempt_depth=%s",
+            node.title,
+            should_attempt_depth,
+        )
 
     # 3) Generate text for this node (CONTENT ONLY)
     write_section(
@@ -133,12 +174,19 @@ def process_node_recursively(node: ResearchNode, tree: ResearchTree, top_k: int 
             is_final=True
         )
         db.commit()
+        logger.info(
+            "Persisted node '%s' content_len=%s did_deepen=%s",
+            node.title,
+            len((node.content or "").strip()),
+            did_deepen,
+        )
     finally:
         db.close()
 
     # 5) Recurse
     for subnode in node.subnodes:
         process_node_recursively(subnode, tree)
+    logger.info("Finished node '%s'", node.title)
 
 
         

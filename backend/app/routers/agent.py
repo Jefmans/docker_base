@@ -1,8 +1,10 @@
+import logging
+from typing import Callable
+from uuid import uuid4
+
 from fastapi import APIRouter, BackgroundTasks, HTTPException
 from fastapi.responses import JSONResponse, Response
-from uuid import uuid4
 from pydantic import BaseModel
-from typing import Callable
 from app.utils.agent.search_chunks import search_chunks
 from app.utils.agent.subquestions import generate_subquestions_from_chunks
 from app.utils.agent.outline import generate_outline_from_tree
@@ -20,12 +22,8 @@ from app.db.db import SessionLocal, Session as SessionRecord
 from app.repositories.research_tree_repo import ResearchTreeRepository
 from app.renderers.article_renderer import ArticleRenderer
 from app.mappers.outline_to_tree import node_from_outline_section
-
-
-
-
-
 router = APIRouter()
+logger = logging.getLogger(__name__)
 
 class AgentQueryRequest(BaseModel):
     query: str = "What is a black hole ?"
@@ -115,9 +113,37 @@ def _run_full_agent_pipeline(
     user_query = request.query
     db = SessionLocal()
     try:
+        logger.info(
+            "[answer-run %s] Starting pipeline for query=%r top_k=%s document_id=%s project_id=%s",
+            active_session_id,
+            user_query,
+            request.top_k,
+            request.document_id,
+            request.project_id,
+        )
         _report_progress(progress_callback, "Resolving scope")
         scope = _resolve_scope_or_400(db, request)
         plan = build_research_plan(user_query, scope, requested_top_k=request.top_k)
+        logger.info(
+            "[answer-run %s] Scope resolved: mode=%s label=%r document_count=%s filenames=%s",
+            active_session_id,
+            scope.mode,
+            scope.label,
+            scope.document_count,
+            len(scope.filenames),
+        )
+        logger.info(
+            "[answer-run %s] Plan: root_top_k=%s root_subquestion_target=%s outline_target_sections=%s "
+            "section_top_k=%s section_context_chunks=%s desired_depth=%s evidence_profile=%s",
+            active_session_id,
+            plan.root_top_k,
+            plan.root_subquestion_target,
+            plan.outline_target_sections,
+            plan.section_top_k,
+            plan.section_context_chunks,
+            plan.desired_depth,
+            plan.evidence_profile,
+        )
 
         _report_progress(progress_callback, "Initializing research tree")
         root_node = ResearchNode(title=request.query)
@@ -125,9 +151,15 @@ def _run_full_agent_pipeline(
         repo = ResearchTreeRepository(db)
         repo.save(tree, active_session_id)
         db.commit()
+        logger.info("[answer-run %s] Root research tree initialized", active_session_id)
 
         _report_progress(progress_callback, "Searching initial evidence")
         top_chunks = search_chunks(user_query, top_k=plan.root_top_k, scope=scope)
+        logger.info(
+            "[answer-run %s] Initial evidence retrieval returned %s chunks",
+            active_session_id,
+            len(top_chunks),
+        )
 
         chunk_dicts = _build_initial_chunk_dicts(top_chunks)
         upsert_chunks(db, chunk_dicts)
@@ -142,9 +174,19 @@ def _run_full_agent_pipeline(
             context_chunk_limit=tree.plan.root_context_chunks,
         )
         _attach_questions_in_memory_and_db(db, tree, subq, source="root_subq")
+        logger.info(
+            "[answer-run %s] Generated %s root questions",
+            active_session_id,
+            len(subq),
+        )
 
         _report_progress(progress_callback, "Building outline")
         outline = generate_outline_from_tree(tree)
+        logger.info(
+            "[answer-run %s] Outline built with %s raw sections",
+            active_session_id,
+            len(outline.sections),
+        )
     finally:
         db.close()
 
@@ -168,6 +210,12 @@ def _run_full_agent_pipeline(
             _attach_outline_questions(s, n, db)
 
         db.commit()
+        logger.info(
+            "[answer-run %s] Persisted outline with %s top-level sections: %s",
+            active_session_id,
+            len(tree.root_node.subnodes),
+            [node.title for node in tree.root_node.subnodes],
+        )
     finally:
         db.close()
 
@@ -175,7 +223,20 @@ def _run_full_agent_pipeline(
     section_outputs = []
     _report_progress(progress_callback, "Writing sections")
     for node in tree.root_node.subnodes:
+        logger.info(
+            "[answer-run %s] Processing top-level section '%s' (%s/%s)",
+            active_session_id,
+            node.title,
+            node.rank,
+            len(tree.root_node.subnodes),
+        )
         process_node_recursively(node, tree, top_k=tree.plan.section_top_k)
+        logger.info(
+            "[answer-run %s] Finished top-level section '%s' content_len=%s",
+            active_session_id,
+            node.title,
+            len((node.content or "").strip()),
+        )
 
     for node in tree.root_node.subnodes:
         section_outputs.extend(_collect_section_outputs(node))
@@ -184,6 +245,12 @@ def _run_full_agent_pipeline(
     _report_progress(progress_callback, "Synthesizing answer")
     exec_summary = write_executive_summary(tree)
     overall_concl = write_overall_conclusion(tree)
+    logger.info(
+        "[answer-run %s] Synthesized executive summary len=%s and overall conclusion len=%s",
+        active_session_id,
+        len(exec_summary.strip()),
+        len(overall_concl.strip()),
+    )
     tree.root_node.summary = exec_summary
     tree.root_node.conclusion = overall_concl
     tree.root_node.is_final = True
@@ -203,6 +270,12 @@ def _run_full_agent_pipeline(
 
     _report_progress(progress_callback, "Finalizing article")
     article = finalize_article_from_tree(tree)
+    logger.info(
+        "[answer-run %s] Final article assembled len=%s with %s sections",
+        active_session_id,
+        len(article),
+        len(section_outputs),
+    )
 
     return {
         "session_id": active_session_id,
@@ -222,6 +295,7 @@ def _run_answer_job(session_id: str, request: AgentQueryRequest) -> None:
         def mark(stage: str) -> None:
             nonlocal last_stage
             last_stage = stage
+            logger.info("[answer-run %s] Stage -> %s", session_id, stage)
             update_answer_run(session_id, status="running", stage=stage)
 
         mark("Starting research tree")
@@ -231,7 +305,9 @@ def _run_answer_job(session_id: str, request: AgentQueryRequest) -> None:
             progress_callback=mark,
         )
         update_answer_run(session_id, status="completed", stage="Completed", result=result)
+        logger.info("[answer-run %s] Completed successfully", session_id)
     except Exception as exc:
+        logger.exception("[answer-run %s] Failed during stage %s", session_id, last_stage)
         update_answer_run(
             session_id,
             status="failed",

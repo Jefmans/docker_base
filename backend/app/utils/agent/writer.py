@@ -11,7 +11,8 @@ from app.utils.vectorstore import get_caption_store, get_vectorstore
 
 
 logger = logging.getLogger(__name__)
-llm = ChatOpenAI(model="gpt-4o", temperature=0)
+LLM_TIMEOUT_SECONDS = 120
+llm = ChatOpenAI(model="gpt-4o", temperature=0, timeout=LLM_TIMEOUT_SECONDS)
 
 
 def get_context_for_questions(questions: List[str], top_k: int = 5, context_limit: int = 12) -> str:
@@ -66,8 +67,21 @@ def write_section(
             """
         ).strip()
 
-        node.content = llm.invoke(prompt).content.strip()
-        node.mark_final()
+        logger.info(
+            "Writing section '%s' with %s questions, %s chunks, context_limit=%s context_chars=%s",
+            node.title,
+            len(questions),
+            len(chunks),
+            context_chunk_limit,
+            len(context),
+        )
+        try:
+            node.content = llm.invoke(prompt).content.strip()
+            node.mark_final()
+            logger.info("Finished section '%s' content_len=%s", node.title, len(node.content))
+        except Exception:
+            logger.exception("Section generation failed for '%s'", node.title)
+            raise
 
         mark_questions_consumed(db, [q.id for q in q_objs])
         db.commit()
@@ -98,7 +112,14 @@ def write_summary(node: ResearchNode, *, context_chunk_limit: int = 12) -> str:
         The summary should extract the main findings only.
         """
     ).strip()
-    return llm.invoke(prompt).content.strip()
+    logger.info("Writing summary for '%s' context_chars=%s", node.title, len(context))
+    try:
+        result = llm.invoke(prompt).content.strip()
+        logger.info("Finished summary for '%s' len=%s", node.title, len(result))
+        return result
+    except Exception:
+        logger.exception("Summary generation failed for '%s'", node.title)
+        raise
 
 
 def write_conclusion(node: ResearchNode, *, context_chunk_limit: int = 12) -> str:
@@ -123,7 +144,14 @@ def write_conclusion(node: ResearchNode, *, context_chunk_limit: int = 12) -> st
         The conclusion should reflect on implications, limitations, or takeaways without repeating the full section.
         """
     ).strip()
-    return llm.invoke(prompt).content.strip()
+    logger.info("Writing conclusion for '%s' context_chars=%s", node.title, len(context))
+    try:
+        result = llm.invoke(prompt).content.strip()
+        logger.info("Finished conclusion for '%s' len=%s", node.title, len(result))
+        return result
+    except Exception:
+        logger.exception("Conclusion generation failed for '%s'", node.title)
+        raise
 
 
 def write_executive_summary(tree: ResearchTree) -> str:
@@ -148,7 +176,19 @@ def write_executive_summary(tree: ResearchTree) -> str:
         {context}
         """
     ).strip()
-    return llm_local.invoke(prompt).content.strip()
+    logger.info(
+        "Writing executive summary title=%r excerpt_count=%s context_chars=%s",
+        tree.root_node.title,
+        len(sections[: tree.plan.summary_context_sections]),
+        len(context),
+    )
+    try:
+        result = llm_local.invoke(prompt).content.strip()
+        logger.info("Finished executive summary len=%s", len(result))
+        return result
+    except Exception:
+        logger.exception("Executive summary generation failed for title=%r", tree.root_node.title)
+        raise
 
 
 def write_overall_conclusion(tree: ResearchTree) -> str:
@@ -178,4 +218,16 @@ def write_overall_conclusion(tree: ResearchTree) -> str:
         {context}
         """
     ).strip()
-    return llm_local.invoke(prompt).content.strip()
+    logger.info(
+        "Writing overall conclusion title=%r finding_count=%s context_chars=%s",
+        tree.root_node.title,
+        len(bullets[: max(tree.plan.summary_context_sections, 6)]),
+        len(context),
+    )
+    try:
+        result = llm_local.invoke(prompt).content.strip()
+        logger.info("Finished overall conclusion len=%s", len(result))
+        return result
+    except Exception:
+        logger.exception("Overall conclusion generation failed for title=%r", tree.root_node.title)
+        raise
