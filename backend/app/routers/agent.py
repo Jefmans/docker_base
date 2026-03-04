@@ -16,7 +16,7 @@ from app.utils.agent.repo import upsert_questions, attach_questions_to_node, upd
 from app.utils.agent.router_utils import choose_best_node_for_question, get_top_level_section_or_400, _filter_structural_sections
 from app.utils.document_scope import resolve_research_scope
 from app.utils.agent.answer_runs import create_answer_run, get_answer_run, update_answer_run
-from app.utils.agent.planning import build_research_plan
+from app.utils.agent.planning import build_research_plan, refine_research_plan_from_initial_chunks
 import hashlib
 from app.db.db import SessionLocal, Session as SessionRecord
 from app.repositories.research_tree_repo import ResearchTreeRepository
@@ -49,13 +49,33 @@ def _resolve_scope_or_400(db, request: AgentQueryRequest):
     return scope
 
 
-def _build_initial_chunk_dicts(texts: list[str]) -> list[dict]:
-    return [{
-        "id": hashlib.sha1(text.encode("utf-8")).hexdigest(),
-        "text": text,
-        "page": None,
-        "source": None,
-    } for text in texts]
+def _build_initial_chunk_dicts(items: list) -> list[dict]:
+    chunk_dicts = []
+    for item in items:
+        if hasattr(item, "page_content"):
+            text = item.page_content
+            metadata = getattr(item, "metadata", {}) or {}
+            chunk_id = metadata.get("id") or metadata.get("_id") or hashlib.sha1(text.encode("utf-8")).hexdigest()
+            chunk_dicts.append(
+                {
+                    "id": chunk_id,
+                    "text": text,
+                    "page": metadata.get("page"),
+                    "source": metadata.get("source") or metadata.get("source_pdf"),
+                }
+            )
+            continue
+
+        text = str(item)
+        chunk_dicts.append(
+            {
+                "id": hashlib.sha1(text.encode("utf-8")).hexdigest(),
+                "text": text,
+                "page": None,
+                "source": None,
+            }
+        )
+    return chunk_dicts
 
 
 def _mirror_chunks_on_node(node: ResearchNode, chunk_dicts: list[dict]) -> None:
@@ -154,7 +174,7 @@ def _run_full_agent_pipeline(
         logger.info("[answer-run %s] Root research tree initialized", active_session_id)
 
         _report_progress(progress_callback, "Searching initial evidence")
-        top_chunks = search_chunks(user_query, top_k=plan.root_top_k, scope=scope)
+        top_chunks = search_chunks(user_query, top_k=plan.root_top_k, return_docs=True, scope=scope)
         logger.info(
             "[answer-run %s] Initial evidence retrieval returned %s chunks",
             active_session_id,
@@ -162,6 +182,17 @@ def _run_full_agent_pipeline(
         )
 
         chunk_dicts = _build_initial_chunk_dicts(top_chunks)
+        tree.plan = refine_research_plan_from_initial_chunks(tree.plan, chunk_dicts)
+        logger.info(
+            "[answer-run %s] Refined plan from evidence: root_subquestion_target=%s outline_target_sections=%s "
+            "section_top_k=%s section_subquestion_target=%s evidence_profile=%s",
+            active_session_id,
+            tree.plan.root_subquestion_target,
+            tree.plan.outline_target_sections,
+            tree.plan.section_top_k,
+            tree.plan.section_subquestion_target,
+            tree.plan.evidence_profile,
+        )
         upsert_chunks(db, chunk_dicts)
         attach_chunks_to_node(db, tree.root_node.id, [chunk["id"] for chunk in chunk_dicts])
         _mirror_chunks_on_node(tree.root_node, chunk_dicts)
@@ -230,7 +261,7 @@ def _run_full_agent_pipeline(
             node.rank,
             len(tree.root_node.subnodes),
         )
-        process_node_recursively(node, tree, top_k=tree.plan.section_top_k)
+        process_node_recursively(node, tree)
         logger.info(
             "[answer-run %s] Finished top-level section '%s' content_len=%s",
             active_session_id,

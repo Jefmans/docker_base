@@ -22,6 +22,8 @@ from app.utils.agent.repo import (
 )
 from app.utils.agent.search_chunks import search_chunks
 from app.utils.agent.subquestions import generate_subquestions_from_chunks
+from app.utils.agent.title_from_cluster import title_from_cluster as llm_title_from_cluster
+from app.utils.agent.topics import group_semantic
 from app.utils.agent.writer import write_section
 
 
@@ -188,18 +190,35 @@ def process_node_recursively(node: ResearchNode, tree: ResearchTree, top_k: int 
             db.close()
 
         if refinement.should_deepen and refinement.novel_questions:
-            deepen_node_with_subquestions(
+            clusters = group_semantic(refinement.novel_questions, tau=None)
+            clusters = [cluster for cluster in clusters if cluster]
+            if not clusters:
+                clusters = [[question] for question in refinement.novel_questions]
+            created_nodes = create_subnodes_from_clusters(
                 node,
-                refinement.novel_questions,
-                top_k=execution_plan.retrieval_top_k,
-                scope=tree.scope,
+                clusters,
+                llm_title_from_cluster,
             )
-            did_deepen = True
-            logger.info(
-                "Node '%s' deepened with %s novel questions",
-                node.title,
-                len(refinement.novel_questions),
-            )
+            if created_nodes:
+                did_deepen = True
+                logger.info(
+                    "Node '%s' deepened structurally with %s new subnodes",
+                    node.title,
+                    len(created_nodes),
+                )
+            else:
+                deepen_node_with_subquestions(
+                    node,
+                    refinement.novel_questions,
+                    top_k=execution_plan.retrieval_top_k,
+                    scope=tree.scope,
+                )
+                did_deepen = True
+                logger.info(
+                    "Node '%s' deepened with %s novel questions (no structural clusters created)",
+                    node.title,
+                    len(refinement.novel_questions),
+                )
         else:
             logger.info(
                 "Node '%s' skipped deepening after refinement: %s",
@@ -270,23 +289,29 @@ def create_subnodes_from_clusters(
     attach those questions to the new child. Titles come from cluster_title_fn.
     """
     local_db = db or SessionLocal()
+    created_nodes: list[ResearchNode] = []
     try:
         parent_orm = local_db.execute(
             select(ResearchNodeORM).where(ResearchNodeORM.id == node.id)
         ).scalar_one_or_none()
         if not parent_orm:
-            return
+            return created_nodes
         session_id = parent_orm.session_id
 
         q_rows = local_db.execute(select(QuestionORM.id, QuestionORM.text)).all()
         q_to_id = {text.lower(): qid for (qid, text) in q_rows}
 
+        existing_titles = {child.title.strip().lower() for child in node.subnodes}
         current_children_count = len(node.subnodes)
 
         for i, cluster in enumerate(clusters_q, start=1):
             if not cluster:
                 continue
             title = cluster_title_fn(cluster)
+            normalized_title = title.strip().lower()
+            if normalized_title in existing_titles:
+                continue
+            existing_titles.add(normalized_title)
 
             child_orm = ResearchNodeORM(
                 session_id=session_id,
@@ -306,11 +331,22 @@ def create_subnodes_from_clusters(
             question_ids = [q_to_id.get(question.strip().lower()) for question in cluster]
             question_ids = [question_id for question_id in question_ids if question_id]
             attach_questions_to_node(local_db, child_orm.id, question_ids)
+            child_node = ResearchNode(
+                id=child_orm.id,
+                title=title,
+                questions=list(dict.fromkeys(cluster)),
+                rank=child_orm.rank,
+                level=child_orm.level,
+                parent=node,
+            )
+            node.subnodes.append(child_node)
+            created_nodes.append(child_node)
 
         local_db.commit()
     finally:
         if db is None:
             local_db.close()
+    return created_nodes
 
 
 def title_from_cluster(cluster: list[str]) -> str:

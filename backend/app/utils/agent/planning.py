@@ -34,20 +34,22 @@ def estimate_query_complexity(query: str, scope: ResearchScope) -> int:
     distinct_terms = len(set(tokens))
     matched_terms = sum(1 for term in _COMPLEXITY_TERMS if term in tokens)
 
-    score = 1
-    if token_count >= 9:
+    score = 0
+    if token_count >= 7:
         score += 1
-    if token_count >= 16:
+    if token_count >= 14:
         score += 1
-    if distinct_terms >= 10:
+    if distinct_terms >= 8:
         score += 1
-    if matched_terms >= 2:
+    if matched_terms >= 1:
+        score += 1
+    if matched_terms >= 3:
         score += 1
     if scope.document_count >= 3:
         score += 1
     if scope.mode == "all":
         score += 1
-    return _clamp(score, 1, 6)
+    return _clamp(score, 0, 6)
 
 
 def build_research_plan(query: str, scope: ResearchScope, *, requested_top_k: int = 5) -> ResearchPlan:
@@ -55,15 +57,19 @@ def build_research_plan(query: str, scope: ResearchScope, *, requested_top_k: in
     document_count = max(scope.document_count, len(scope.filenames), 1)
     broad_scope = scope.mode in {"project", "all"} or document_count > 1
 
-    root_top_k = _clamp(max(requested_top_k, 4 + complexity + min(document_count, 4)), 4, 18)
-    root_context_chunks = _clamp(6 + complexity + min(document_count, 3), 6, 16)
-    root_subquestion_target = _clamp(3 + complexity + (1 if broad_scope else 0), 4, 10)
-    outline_target_sections = _clamp(2 + complexity + (1 if document_count >= 4 else 0), 3, 8)
+    root_top_k = _clamp(max(requested_top_k, 3 + complexity + min(document_count, 4)), 3, 18)
+    root_context_chunks = _clamp(4 + complexity + min(document_count, 3), 4, 16)
+    root_subquestion_target = _clamp(2 + complexity + (1 if broad_scope else 0), 2, 10)
+    outline_target_sections = _clamp(
+        1 + complexity + (1 if document_count >= 4 else 0) + (1 if broad_scope and complexity >= 2 else 0),
+        2,
+        8,
+    )
     outline_max_subsections = _clamp(1 + (complexity // 2), 1, 4)
-    section_top_k = _clamp(5 + complexity + min(document_count, 3), 5, 14)
-    section_context_chunks = _clamp(8 + complexity + min(document_count, 4), 8, 20)
-    section_subquestion_target = _clamp(2 + complexity, 3, 7)
-    summary_context_sections = _clamp(4 + complexity + min(document_count, 2), 4, 12)
+    section_top_k = _clamp(4 + complexity + min(document_count, 3), 4, 14)
+    section_context_chunks = _clamp(6 + complexity + min(document_count, 4), 5, 20)
+    section_subquestion_target = _clamp(1 + complexity + (1 if broad_scope and complexity >= 2 else 0), 1, 7)
+    summary_context_sections = _clamp(3 + complexity + min(document_count, 2), 3, 12)
     desired_depth = 2 if complexity <= 2 and not broad_scope else 3
     if complexity >= 5 and broad_scope:
         desired_depth = 4
@@ -96,6 +102,47 @@ def build_research_plan(query: str, scope: ResearchScope, *, requested_top_k: in
     )
 
 
+def refine_research_plan_from_initial_chunks(plan: ResearchPlan, chunk_dicts: list[dict]) -> ResearchPlan:
+    unique_chunk_ids = {chunk.get("id") for chunk in chunk_dicts if chunk.get("id")}
+    unique_sources = {chunk.get("source") for chunk in chunk_dicts if chunk.get("source")}
+    unique_pages = {
+        (chunk.get("source"), chunk.get("page"))
+        for chunk in chunk_dicts
+        if chunk.get("page") is not None
+    }
+
+    unique_chunk_count = len(unique_chunk_ids) or len(chunk_dicts)
+    unique_source_count = len(unique_sources)
+    unique_page_count = len(unique_pages)
+
+    updates: dict[str, object] = {}
+
+    if unique_chunk_count <= 4:
+        updates["root_subquestion_target"] = _clamp(plan.root_subquestion_target - 1, 2, 10)
+        updates["outline_target_sections"] = _clamp(plan.outline_target_sections - 1, 2, 8)
+        updates["section_top_k"] = _clamp(plan.section_top_k - 1, 4, 14)
+        updates["section_context_chunks"] = _clamp(plan.section_context_chunks - 2, 4, 20)
+        updates["section_subquestion_target"] = _clamp(plan.section_subquestion_target - 1, 1, 7)
+        updates["summary_context_sections"] = _clamp(plan.summary_context_sections - 1, 2, 12)
+        updates["section_length_hint"] = "1-2 short evidence-grounded paragraphs"
+        updates["evidence_profile"] = "sparse"
+    elif unique_chunk_count >= 8 or (unique_chunk_count >= 6 and unique_source_count >= 2):
+        updates["root_subquestion_target"] = _clamp(plan.root_subquestion_target + 1, 2, 10)
+        updates["outline_target_sections"] = _clamp(plan.outline_target_sections + 1, 2, 8)
+        updates["section_top_k"] = _clamp(plan.section_top_k + 1, 4, 14)
+        updates["section_context_chunks"] = _clamp(plan.section_context_chunks + 2, 4, 20)
+        updates["section_subquestion_target"] = _clamp(plan.section_subquestion_target + 1, 1, 7)
+        updates["summary_context_sections"] = _clamp(plan.summary_context_sections + 1, 2, 12)
+        updates["section_length_hint"] = (
+            "3-5 medium paragraphs" if plan.query_complexity >= 2 else "2-4 focused paragraphs"
+        )
+        updates["evidence_profile"] = "rich" if unique_source_count >= 2 or unique_page_count >= 6 else "moderate"
+    else:
+        updates["evidence_profile"] = "moderate" if unique_page_count >= 3 else plan.evidence_profile
+
+    return plan.model_copy(update=updates)
+
+
 def node_retrieval_top_k(plan: ResearchPlan, node: ResearchNode) -> int:
     depth_penalty = max((node.level or 1) - 2, 0)
     question_bonus = min(len(node.questions or []), 3)
@@ -116,4 +163,3 @@ def node_subquestion_target(plan: ResearchPlan, node: ResearchNode) -> int:
 
 def node_should_attempt_depth(plan: ResearchPlan, node: ResearchNode) -> bool:
     return (node.level or 1) < plan.desired_depth
-

@@ -181,6 +181,25 @@ WHAT HAS BEEN FIXED ALREADY
      d) whether a node should even attempt to deepen
    - This is the first implementation slice of the Research Tree V2 direction
 
+9. Root planning is now refined from initial retrieved evidence
+   - Files:
+     backend/app/utils/agent/planning.py
+     backend/app/routers/agent.py
+   - The first retrieval now adjusts key budgets before subquestions and outline:
+     a) root_subquestion_target
+     b) outline_target_sections
+     c) section_top_k and section_subquestion_target
+     d) section context and summary budget
+   - This reduces the tendency to produce the same fixed shape for unrelated queries
+
+10. Structural deepening is now automatic in recursive processing
+    - File:
+      backend/app/utils/agent/expander.py
+    - When refinement approves deepening, novel questions are clustered into
+      child subnodes and attached automatically during full_run
+    - This moves deepening behavior from a mostly manual route toward the
+      intended local refinement loop
+
 
 CURRENT WEAKNESSES
 ------------------
@@ -218,9 +237,10 @@ CURRENT WEAKNESSES
    - write_summary() and write_conclusion() are almost the same in structure
    - They should become clearly separate writing goals
 
-7. Initial root chunks lose metadata
-   - Initial chunks are stored with page=None and source=None
-   - This loses provenance that was available in vector retrieval
+7. Initial root chunk provenance is only partially normalized
+   - Root retrieval in full_run now keeps available page/source metadata
+   - Some fallback paths still use text-only chunk records
+   - Provenance handling should be made consistent across all entry routes
 
 8. Tree persistence is append/update oriented, not fully pruning old branches
    - File: backend/app/repositories/research_tree_repo.py
@@ -251,7 +271,7 @@ Phase 3: Session and reload reduction
 
 Phase 4: Retrieval quality and provenance
 1. Done: adaptive retrieval and writing budgets now vary with query/scope breadth
-2. Keep page/source metadata on initial root chunks
+2. Done: keep available page/source metadata on initial root chunks in full_run
 3. Improve retrieval payloads used for writing
 4. Tune using source diversity / retrieval scores, not only heuristics
 
@@ -459,3 +479,5 @@ CHANGE LOG
 - Added adaptive research planning so tree size and writing budgets vary by query and scope
 - Recorded the agreed Research Tree V2 direction: bounded local refinement loop, not full-tree restart loops
 - Added the first evidence-aware controller slice so node budgets and deepening gates now react to local chunk density
+- Added evidence-driven root plan refinement after initial retrieval
+- Enabled automatic structural deepening (clustered novel questions -> new child subnodes) in recursive processing
