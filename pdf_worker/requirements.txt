@@ -2,10 +2,10 @@ fastapi
 uvicorn[standard]
 minio
 PyMuPDF
-langchain
-langchain-community
-langchain-core
-langchain-openai
+langchain>=0.3.25,<0.4
+langchain-community>=0.3.24,<0.4
+langchain-core>=0.3.59,<0.4
+langchain-openai>=0.3.16,<0.4
 pydantic
 Pillow
 python-dotenv
