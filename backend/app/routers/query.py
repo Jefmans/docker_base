@@ -5,8 +5,7 @@ from pydantic import BaseModel
 from sqlalchemy.orm import Session
 
 from app.db.db import get_db
-from app.db.models.document_orm import Document
-from app.db.models.project_orm import Project
+from app.utils.document_scope import resolve_research_scope
 from app.utils.vectorstore import get_vectorstore
 
 
@@ -27,66 +26,37 @@ class QueryRequest(BaseModel):
 @router.post("/query/")
 async def query(request: QueryRequest, db: Session = Depends(get_db)):
     try:
-        if request.document_id and request.project_id:
-            raise HTTPException(status_code=400, detail="Choose document_id or project_id, not both")
+        try:
+            scope = resolve_research_scope(
+                db,
+                document_id=request.document_id,
+                project_id=request.project_id,
+            )
+        except ValueError as exc:
+            raise HTTPException(status_code=400, detail=str(exc)) from exc
+        except LookupError as exc:
+            raise HTTPException(status_code=404, detail=str(exc)) from exc
 
-        filters = None
-        scope = {"mode": "all", "document_id": None, "project_id": None}
-
-        if request.document_id:
-            document = db.get(Document, request.document_id)
-            if document is None:
-                raise HTTPException(status_code=404, detail="Document not found")
-            filters = {"source_pdf": document.filename}
-            scope = {
-                "mode": "document",
-                "document_id": str(document.id),
-                "project_id": str(document.project_id) if document.project_id else None,
-            }
-        elif request.project_id:
-            project = db.get(Project, request.project_id)
-            if project is None:
-                raise HTTPException(status_code=404, detail="Project not found")
-
-            filenames = [
-                filename
-                for (filename,) in (
-                    db.query(Document.filename)
-                    .filter(Document.project_id == project.id)
-                    .all()
-                )
-            ]
-            if not filenames:
-                return {
-                    "scope": {
-                        "mode": "project",
-                        "document_id": None,
-                        "project_id": str(project.id),
-                    },
-                    "text_chunks": [],
-                    "captions": [],
-                }
-
-            filters = {"source_pdf": filenames}
-            scope = {
-                "mode": "project",
-                "document_id": None,
-                "project_id": str(project.id),
+        if scope.mode == "project" and not scope.filenames:
+            return {
+                "scope": scope.model_dump(),
+                "text_chunks": [],
+                "captions": [],
             }
 
         text_results = vectorstore.similarity_search_with_score(
             query=request.query,
             k=request.top_k,
-            filters=filters,
+            filters=scope.search_filters(),
         )
         caption_results = caption_store.similarity_search_with_score(
             query=request.query,
             k=request.top_k,
-            filters=filters,
+            filters=scope.search_filters(),
         )
 
         return {
-            "scope": scope,
+            "scope": scope.model_dump(),
             "text_chunks": [
                 {
                     "text": doc.page_content, 

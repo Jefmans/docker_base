@@ -1,6 +1,6 @@
 from app.utils.agent.search_chunks import search_chunks
 from app.utils.agent.subquestions import generate_subquestions_from_chunks
-from app.models.research_tree import ResearchNode, ResearchTree, Chunk
+from app.models.research_tree import ResearchNode, ResearchTree, Chunk, ResearchScope
 from app.utils.agent.controller import should_deepen_node, get_novel_expansion_questions
 from app.utils.agent.writer import write_section, write_summary, write_conclusion
 from app.utils.agent.repo import upsert_chunks, attach_chunks_to_node, upsert_questions, attach_questions_to_node, update_node_fields
@@ -20,7 +20,7 @@ def enrich_node_with_chunks_and_subquestions(node: ResearchNode, tree: ResearchT
     queries = [node.title] + getattr(node, "questions", [])
     combined_query = " ".join(q for q in queries if q).strip() or node.title
 
-    results = search_chunks(combined_query, top_k=top_k, return_docs=True)
+    results = search_chunks(combined_query, top_k=top_k, return_docs=True, scope=tree.scope)
 
     chunk_dicts = []
     for doc in results:
@@ -54,11 +54,16 @@ def enrich_node_with_chunks_and_subquestions(node: ResearchNode, tree: ResearchT
 
 
 # app/utils/agent/expander.py
-def deepen_node_with_subquestions(node, questions: list[str], top_k=5):
+def deepen_node_with_subquestions(
+    node,
+    questions: list[str],
+    top_k=5,
+    scope: ResearchScope | None = None,
+):
     db = SessionLocal()
     try:
         for q in questions:
-            results = search_chunks(q, top_k=top_k, return_docs=True)
+            results = search_chunks(q, top_k=top_k, return_docs=True, scope=scope)
             chunk_dicts = []
             for i, doc in enumerate(results):
                 chunk_id = stable_chunk_id(doc.page_content, doc.metadata.get("id"))
@@ -92,7 +97,7 @@ def process_node_recursively(node: ResearchNode, tree: ResearchTree, top_k: int 
             db.close()
 
         if novel_expansion:
-            deepen_node_with_subquestions(node, novel_expansion, top_k=top_k)
+            deepen_node_with_subquestions(node, novel_expansion, top_k=top_k, scope=tree.scope)
 
     # 3) Generate text for this node (CONTENT ONLY)
     write_section(node)

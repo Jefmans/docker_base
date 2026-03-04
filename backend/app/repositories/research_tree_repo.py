@@ -55,7 +55,10 @@ class ResearchTreeRepository:
         # ensure session row exists (stores query + optional snapshot if you want)
         sess = self.db.query(SessionModel).filter(SessionModel.id == session_id).first()
         if sess is None:
-            self.db.add(SessionModel(id=session_id, query=tree.query, tree={}))
+            self.db.add(SessionModel(id=session_id, query=tree.query, tree={"scope": tree.scope.model_dump()}))
+        else:
+            sess.query = tree.query
+            sess.tree = {"scope": tree.scope.model_dump()}
 
         _upsert(tree.root_node, parent_id=None)
         self.db.commit()
@@ -66,6 +69,7 @@ class ResearchTreeRepository:
         if not sess:
             raise ValueError("Session not found")
         original_query = sess.query
+        scope_payload = dict((sess.tree or {}).get("scope") or {})
 
         roots = (
             self.db.query(ResearchNodeORM)
@@ -124,4 +128,4 @@ class ResearchTreeRepository:
             node.chunks = c_by_node.get(nid, [])
             node.chunk_ids = {c.id for c in node.chunks}
 
-        return ResearchTree(query=original_query, root_node=id_map[root_orm.id])
+        return ResearchTree(query=original_query, root_node=id_map[root_orm.id], scope=scope_payload)

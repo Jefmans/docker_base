@@ -11,6 +11,7 @@ from app.models.research_tree import ResearchTree, ResearchNode, Chunk
 from app.utils.agent.expander import enrich_node_with_chunks_and_subquestions, create_subnodes_from_clusters
 from app.utils.agent.repo import upsert_questions, attach_questions_to_node, update_node_fields, get_node_chunks, upsert_chunks, attach_chunks_to_node, get_node_questions
 from app.utils.agent.router_utils import choose_best_node_for_question, get_top_level_section_or_400, _filter_structural_sections
+from app.utils.document_scope import resolve_research_scope
 import hashlib
 from app.db.db import SessionLocal 
 from app.repositories.research_tree_repo import ResearchTreeRepository
@@ -26,16 +27,41 @@ router = APIRouter()
 class AgentQueryRequest(BaseModel):
     query: str = "What is a black hole ?"
     top_k: int = 5
+    document_id: str | None = None
+    project_id: str | None = None
+
+
+def _resolve_scope_or_400(db, request: AgentQueryRequest):
+    try:
+        scope = resolve_research_scope(
+            db,
+            document_id=request.document_id,
+            project_id=request.project_id,
+        )
+    except ValueError as exc:
+        raise HTTPException(status_code=400, detail=str(exc)) from exc
+    except LookupError as exc:
+        raise HTTPException(status_code=404, detail=str(exc)) from exc
+
+    if scope.mode == "project" and not scope.filenames:
+        raise HTTPException(status_code=400, detail="Selected project has no documents")
+    return scope
     
 
 
 @router.post("/agent/query")
 async def start_query_session(request: AgentQueryRequest):
     user_query = request.query
-    top_chunks = search_chunks(user_query, top_k=request.top_k)
+    db = SessionLocal()
+    try:
+        scope = _resolve_scope_or_400(db, request)
+    finally:
+        db.close()
+
+    top_chunks = search_chunks(user_query, top_k=request.top_k, scope=scope)
 
     root_node = ResearchNode(title=user_query)
-    tree = ResearchTree(query=user_query, root_node=root_node)
+    tree = ResearchTree(query=user_query, root_node=root_node, scope=scope)
 
     session_id = str(uuid4())
     db = SessionLocal()
@@ -56,7 +82,8 @@ async def start_query_session(request: AgentQueryRequest):
         db.close()
 
     return {"status": "success", "session_id": session_id, "query": user_query,
-            "preview_chunks": top_chunks[:3]}
+            "preview_chunks": top_chunks[:3],
+            "scope": scope.model_dump()}
 
 
 @router.post("/agent/subquestions")
@@ -357,13 +384,19 @@ def complete_section(session_id: str, section_id: int):
 @router.post("/agent/full_run")
 def full_run(request: AgentQueryRequest):
     try:
+        db = SessionLocal()
+        try:
+            scope = _resolve_scope_or_400(db, request)
+        finally:
+            db.close()
+
         # STEP 1: create session + persist root node in DB
         session_id = str(uuid4())
         user_query = request.query
-        top_chunks = search_chunks(user_query, top_k=request.top_k)
+        top_chunks = search_chunks(user_query, top_k=request.top_k, scope=scope)
 
         root_node = ResearchNode(title=request.query)
-        tree = ResearchTree(query=user_query, root_node=root_node)
+        tree = ResearchTree(query=user_query, root_node=root_node, scope=scope)
 
         db = SessionLocal()
         try:
@@ -508,6 +541,7 @@ def full_run(request: AgentQueryRequest):
             "session_id": session_id,
             "title": tree.root_node.title or user_query,
             "abstract": tree.root_node.content or "",
+            "scope": tree.scope.model_dump(),
             "outline": [s.dict() for s in filtered_sections],
             "sections": section_outputs,
             "article": article

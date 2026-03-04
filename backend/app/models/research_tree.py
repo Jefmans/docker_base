@@ -4,6 +4,20 @@ from typing import List, Optional, Set
 from pydantic import BaseModel, Field
 from uuid import uuid4, UUID
 
+class ResearchScope(BaseModel):
+    mode: str = "all"
+    document_id: Optional[str] = None
+    project_id: Optional[str] = None
+    filenames: List[str] = Field(default_factory=list)
+    label: Optional[str] = None
+
+    def search_filters(self) -> Optional[dict]:
+        if self.mode == "all" or not self.filenames:
+            return None
+        if len(self.filenames) == 1:
+            return {"source_pdf": self.filenames[0]}
+        return {"source_pdf": list(self.filenames)}
+
 class Chunk(BaseModel):
     id: str
     text: str
@@ -74,6 +88,7 @@ class ResearchNode(BaseModel):
 class ResearchTree(BaseModel):
     query: str
     root_node: ResearchNode
+    scope: ResearchScope = Field(default_factory=ResearchScope)
     used_questions: Set[str] = Field(default_factory=set)
     used_chunk_ids: Set[str] = Field(default_factory=set)
 
@@ -119,6 +134,7 @@ class ResearchTree(BaseModel):
             }
         return {
             "query": self.query,
+            "scope": self.scope.model_dump(),
             "root_node": clean_node(self.root_node),
             "used_questions": list(self.used_questions),
             "used_chunk_ids": list(self.used_chunk_ids),

@@ -30,8 +30,14 @@ class SimpleElasticsearchVectorStore:
             )
         return self._embeddings
 
-    def similarity_search(self, query: str, k: int = 5) -> list[StoredDocument]:
-        return [doc for doc, _score in self.similarity_search_with_score(query=query, k=k)]
+    def similarity_search(
+        self,
+        query: str,
+        k: int = 5,
+        *,
+        filters: dict[str, object] | None = None,
+    ) -> list[StoredDocument]:
+        return [doc for doc, _score in self.similarity_search_with_score(query=query, k=k, filters=filters)]
 
     def similarity_search_with_score(
         self,

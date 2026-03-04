@@ -194,6 +194,8 @@ body {
 .upload-panel,
 .jobs-panel,
 .search-panel,
+.build-panel,
+.answer-panel,
 .results-panel {
   padding: 24px;
 }
@@ -325,7 +327,8 @@ input[type="file"]:focus {
 }
 
 .job-card,
-.result-card {
+.result-card,
+.answer-card {
   background: var(--panel-strong);
   border: 1px solid rgba(23, 32, 51, 0.09);
   border-radius: calc(var(--radius) - 6px);
@@ -537,9 +540,57 @@ input[type="file"]:focus {
   gap: 12px;
 }
 
+.answer-card {
+  display: flex;
+  flex-direction: column;
+  gap: 16px;
+}
+
 .result-card p {
   margin: 0;
   line-height: 1.6;
+}
+
+.answer-header {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 10px;
+  align-items: center;
+  justify-content: space-between;
+}
+
+.answer-title {
+  margin: 0;
+  font-family: var(--display-font);
+  font-size: 1.5rem;
+}
+
+.answer-meta {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 8px;
+}
+
+.outline-list {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 8px;
+}
+
+.outline-chip {
+  padding: 7px 11px;
+  border-radius: 999px;
+  background: rgba(36, 99, 74, 0.1);
+  color: var(--success);
+  font-size: 0.8rem;
+  font-weight: 700;
+}
+
+.answer-article {
+  margin: 0;
+  white-space: pre-wrap;
+  line-height: 1.65;
+  font-family: var(--body-font);
 }
 
 .metadata-row {

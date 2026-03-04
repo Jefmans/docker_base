@@ -100,6 +100,34 @@
           </p>
         </section>
 
+        <section class="panel build-panel">
+          <div class="panel-head">
+            <p class="eyebrow">Build Answer</p>
+            <h2>Run the research tree</h2>
+          </div>
+          <form id="answer-form" class="search-form">
+            <label class="field">
+              <span>Research question</span>
+              <textarea id="answer-query-input" rows="5" placeholder="Ask for a structured long-form answer. The selected scope above will constrain the research tree." required></textarea>
+            </label>
+            <button class="primary-button" type="submit" id="answer-button">Build answer</button>
+          </form>
+          <p class="helper" id="answer-helper">
+            This runs the slower article-building pipeline, not the fast search path.
+          </p>
+        </section>
+
+        <section class="panel answer-panel">
+          <div class="panel-head">
+            <p class="eyebrow">Answer</p>
+            <h2>Structured output</h2>
+          </div>
+          <div id="answer-empty" class="empty-state">
+            Build Answer will produce a scoped long-form response here.
+          </div>
+          <div id="answer-output" hidden></div>
+        </section>
+
         <section class="panel results-panel">
           <div class="panel-head">
             <p class="eyebrow">Results</p>

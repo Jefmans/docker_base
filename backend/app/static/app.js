@@ -5,6 +5,7 @@ const state = {
   projects: [],
   documents: [],
   searchResults: null,
+  answerResult: null,
   libraryTimer: null,
 };
 
@@ -23,6 +24,12 @@ const elements = {
   topKSelect: document.getElementById("top-k-select"),
   scopeSelect: document.getElementById("scope-select"),
   searchButton: document.getElementById("search-button"),
+  answerForm: document.getElementById("answer-form"),
+  answerQueryInput: document.getElementById("answer-query-input"),
+  answerButton: document.getElementById("answer-button"),
+  answerHelper: document.getElementById("answer-helper"),
+  answerEmpty: document.getElementById("answer-empty"),
+  answerOutput: document.getElementById("answer-output"),
   resultsEmpty: document.getElementById("results-empty"),
   resultsColumns: document.getElementById("results-columns"),
   textResults: document.getElementById("text-results"),
@@ -94,6 +101,21 @@ function setScopeValue(mode, id) {
     return;
   }
   elements.scopeSelect.value = `${mode}:${id}`;
+}
+
+function humanScopeLabel(scope) {
+  if (!scope || scope.mode === "all") {
+    return "All indexed documents";
+  }
+  if (scope.mode === "project") {
+    const project = state.projects.find((item) => item.id === scope.project_id);
+    return project ? `Project: ${project.name}` : "Selected project";
+  }
+  if (scope.mode === "document") {
+    const doc = findDocumentById(scope.document_id);
+    return doc ? `PDF: ${doc.display_name}` : "Selected PDF";
+  }
+  return "Scoped selection";
 }
 
 function findDocumentById(documentId) {
@@ -202,10 +224,11 @@ function renderJobs() {
       </div>
       <div class="job-actions">
         <button class="mini-button query-button" type="button" ${isQueryable ? "" : "disabled"}>Query this PDF</button>
+        <button class="mini-button answer-button" type="button" ${isQueryable ? "" : "disabled"}>Build answer</button>
         <button class="mini-button danger-button delete-button" type="button" ${isBusy ? "disabled" : ""}>Delete PDF</button>
       </div>
       <form class="project-form">
-        <input type="text" name="project_name" list="project-options" value="${escapeHtml(document.project_name || "")}" placeholder="Assign to a project or leave blank">
+        <input type="text" name="project_name" list="project-options" value="${escapeHtml(doc.project_name || "")}" placeholder="Assign to a project or leave blank">
         <button class="mini-button" type="submit">Save project</button>
       </form>
       <div class="job-stats">
@@ -232,6 +255,14 @@ function renderJobs() {
       } else {
         elements.queryInput.focus();
       }
+    });
+
+    card.querySelector(".answer-button")?.addEventListener("click", () => {
+      setScopeValue("document", doc.id);
+      if (!elements.answerQueryInput.value.trim() && elements.queryInput.value.trim()) {
+        elements.answerQueryInput.value = elements.queryInput.value.trim();
+      }
+      elements.answerQueryInput.focus();
     });
 
     card.querySelector(".delete-button")?.addEventListener("click", () => {
@@ -332,6 +363,44 @@ function renderResults() {
 
   renderStack(elements.textResults, textChunks, "Text chunk");
   renderStack(elements.captionResults, captions, "Caption");
+}
+
+function renderAnswer() {
+  if (!state.answerResult) {
+    elements.answerEmpty.hidden = false;
+    elements.answerOutput.hidden = true;
+    elements.answerOutput.innerHTML = "";
+    return;
+  }
+
+  const outline = state.answerResult.outline || [];
+  const scope = state.answerResult.scope || { mode: "all" };
+  const article = state.answerResult.article || "";
+
+  elements.answerEmpty.hidden = true;
+  elements.answerOutput.hidden = false;
+  elements.answerOutput.innerHTML = `
+    <article class="answer-card">
+      <div class="answer-header">
+        <div>
+          <h3 class="answer-title">${escapeHtml(state.answerResult.title || "Untitled answer")}</h3>
+          <p class="helper">${escapeHtml(state.answerResult.abstract || "No abstract generated.")}</p>
+        </div>
+        <div class="answer-meta">
+          <span class="metadata-chip">${escapeHtml(humanScopeLabel(scope))}</span>
+          <span class="metadata-chip">session ${escapeHtml(state.answerResult.session_id || "")}</span>
+        </div>
+      </div>
+      ${
+        outline.length > 0
+          ? `<div class="outline-list">${outline
+              .map((section) => `<span class="outline-chip">${escapeHtml(section.heading || "Section")}</span>`)
+              .join("")}</div>`
+          : ""
+      }
+      <pre class="answer-article">${escapeHtml(article)}</pre>
+    </article>
+  `;
 }
 
 async function fetchJson(path, options = {}) {
@@ -452,6 +521,10 @@ async function handleDeleteDocument(document) {
       setScopeValue("all");
     }
     state.searchResults = null;
+    if (state.answerResult?.scope?.mode === "document" && state.answerResult.scope.document_id === document.id) {
+      state.answerResult = null;
+      renderAnswer();
+    }
     renderResults();
     await loadLibrary();
     setSignal("live", "Document deleted");
@@ -503,9 +576,59 @@ async function runSearch() {
   }
 }
 
+async function runBuildAnswer() {
+  const query = elements.answerQueryInput.value.trim();
+  if (!query) {
+    return;
+  }
+
+  const scope = currentScope();
+  const payload = {
+    query,
+    top_k: Number(elements.topKSelect.value),
+  };
+  if (scope.mode === "document") {
+    payload.document_id = scope.document_id;
+  }
+  if (scope.mode === "project") {
+    payload.project_id = scope.project_id;
+  }
+
+  elements.answerButton.disabled = true;
+  elements.answerButton.textContent = "Building...";
+  elements.answerHelper.textContent = `Running research tree over ${humanScopeLabel(scope)}. This can take a while.`;
+
+  try {
+    state.answerResult = await fetchJson("agent/full_run", {
+      method: "POST",
+      headers: {
+        "Content-Type": "application/json",
+      },
+      body: JSON.stringify(payload),
+    });
+    renderAnswer();
+    setSignal("live", "Answer built");
+    elements.answerHelper.textContent = "Structured answer generated successfully.";
+  } catch (error) {
+    console.error(error);
+    state.answerResult = null;
+    renderAnswer();
+    elements.answerHelper.textContent = error.message;
+    setSignal("error", error.message);
+  } finally {
+    elements.answerButton.disabled = false;
+    elements.answerButton.textContent = "Build answer";
+  }
+}
+
 async function handleSearch(event) {
   event.preventDefault();
   await runSearch();
+}
+
+async function handleBuildAnswer(event) {
+  event.preventDefault();
+  await runBuildAnswer();
 }
 
 function bindDropzone() {
@@ -543,6 +666,7 @@ function bindDropzone() {
 function bootstrap() {
   elements.uploadForm.addEventListener("submit", handleUpload);
   elements.searchForm.addEventListener("submit", handleSearch);
+  elements.answerForm.addEventListener("submit", handleBuildAnswer);
   elements.scopeSelect.addEventListener("change", () => {
     if (elements.queryInput.value.trim()) {
       runSearch().catch(console.error);
@@ -550,6 +674,7 @@ function bootstrap() {
   });
   bindDropzone();
   renderResults();
+  renderAnswer();
   loadLibrary().catch(console.error);
 }
 
