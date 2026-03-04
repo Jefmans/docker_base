@@ -1,0 +1,121 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Archive Deck</title>
+  <link rel="stylesheet" href="__ROOT_PATH__/static/styles.css">
+  <script defer src="__ROOT_PATH__/static/app.js"></script>
+</head>
+<body data-root-path="__ROOT_PATH__">
+  <div class="background-layer" aria-hidden="true"></div>
+  <main class="shell">
+    <section class="hero panel">
+      <div class="hero-copy">
+        <p class="eyebrow">Archive Deck</p>
+        <h1>Upload a PDF, watch the pipeline, then interrogate the index.</h1>
+        <p class="lede">
+          This interface talks directly to the backend already running on the server.
+          It tracks ingestion jobs in real time and lets you search indexed text chunks and captions once processing is done.
+        </p>
+      </div>
+      <div class="hero-actions">
+        <a class="ghost-button" href="__ROOT_PATH__/docs" target="_blank" rel="noreferrer">Open API Docs</a>
+        <div class="signal">
+          <span class="signal-dot" id="signal-dot"></span>
+          <span id="signal-label">Backend idle</span>
+        </div>
+      </div>
+    </section>
+
+    <section class="workspace">
+      <div class="column column-wide">
+        <section class="panel upload-panel">
+          <div class="panel-head">
+            <p class="eyebrow">Ingest</p>
+            <h2>Drop a PDF into the queue</h2>
+          </div>
+          <form id="upload-form" class="upload-form">
+            <label for="pdf-file" class="dropzone" id="dropzone">
+              <span class="drop-title">Choose a PDF or drag it here</span>
+              <span class="drop-meta">The backend stores the file in MinIO and opens a processing job immediately.</span>
+              <input id="pdf-file" name="file" type="file" accept="application/pdf" required>
+            </label>
+            <div class="form-row">
+              <button class="primary-button" type="submit" id="upload-button">Upload and queue</button>
+              <p class="helper" id="upload-helper">No file selected.</p>
+            </div>
+          </form>
+        </section>
+
+        <section class="panel jobs-panel">
+          <div class="panel-head">
+            <p class="eyebrow">Pipeline</p>
+            <h2>Job monitor</h2>
+          </div>
+          <div id="jobs-empty" class="empty-state">
+            No jobs yet. Upload a PDF to create the first ingest run.
+          </div>
+          <div id="jobs-list" class="jobs-list"></div>
+        </section>
+      </div>
+
+      <div class="column">
+        <section class="panel search-panel">
+          <div class="panel-head">
+            <p class="eyebrow">Search</p>
+            <h2>Query the indexed corpus</h2>
+          </div>
+          <form id="search-form" class="search-form">
+            <label class="field">
+              <span>Question</span>
+              <textarea id="query-input" rows="4" placeholder="Ask about the uploaded material, a figure caption, or a topic spread across multiple PDFs." required></textarea>
+            </label>
+            <div class="search-grid">
+              <label class="field">
+                <span>Scope</span>
+                <select id="scope-select">
+                  <option value="all">All indexed documents</option>
+                </select>
+              </label>
+              <label class="field">
+                <span>Top K</span>
+                <select id="top-k-select">
+                  <option value="3">3</option>
+                  <option value="5" selected>5</option>
+                  <option value="8">8</option>
+                  <option value="10">10</option>
+                </select>
+              </label>
+            </div>
+            <button class="primary-button" type="submit" id="search-button">Run search</button>
+          </form>
+          <p class="helper search-helper">
+            Search runs against the current Elasticsearch indexes. Scope filtering is applied in the browser using the result metadata.
+          </p>
+        </section>
+
+        <section class="panel results-panel">
+          <div class="panel-head">
+            <p class="eyebrow">Results</p>
+            <h2>Text chunks and captions</h2>
+          </div>
+          <div id="results-empty" class="empty-state">
+            Search results will appear here once at least one job completes and you run a query.
+          </div>
+          <div class="results-columns" id="results-columns" hidden>
+            <div>
+              <h3>Text chunks</h3>
+              <div id="text-results" class="results-stack"></div>
+            </div>
+            <div>
+              <h3>Captions</h3>
+              <div id="caption-results" class="results-stack"></div>
+            </div>
+          </div>
+        </section>
+      </div>
+    </section>
+  </main>
+</body>
+</html>

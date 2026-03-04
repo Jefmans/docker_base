@@ -1,5 +1,9 @@
+from pathlib import Path
+
 from fastapi import FastAPI
-from app.routers import agent, extract, health, jobs, process, query, upload
+from fastapi.staticfiles import StaticFiles
+
+from app.routers import agent, extract, health, jobs, process, query, ui, upload
 # from app.db.models import research_node_orm, question_orm, node_question_orm, chunk_orm, node_chunk_orm
 
 
@@ -11,7 +15,14 @@ app = FastAPI(
     root_path="/backend"
 )
 
+app.mount(
+    "/static",
+    StaticFiles(directory=Path(__file__).resolve().parent / "static"),
+    name="static",
+)
+
 # Optional: If you're mounting routes, align them too
+app.include_router(ui.router)
 app.include_router(health.router)
 app.include_router(upload.router)
 app.include_router(extract.router)
