@@ -19,7 +19,10 @@ class ResearchTreeRepository:
 
     # ---------- SAVE ----------
     def save(self, tree: ResearchTree, session_id: str) -> None:
-        """Persist or update the whole tree structure under a session_id."""
+        """Persist or update the whole tree structure under a session_id.
+
+        The caller owns the surrounding transaction and must commit explicitly.
+        """
         def _upsert(node: ResearchNode, parent_id: UUID | None):
             db_node = self.db.query(ResearchNodeORM).filter_by(id=node.id).first()
             if db_node is None:
@@ -63,7 +66,7 @@ class ResearchTreeRepository:
             sess.tree = payload
 
         _upsert(tree.root_node, parent_id=None)
-        self.db.commit()
+        self.db.flush()
 
     # ---------- LOAD ----------
     def load(self, session_id: str) -> ResearchTree:

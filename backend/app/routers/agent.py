@@ -49,70 +49,80 @@ def _resolve_scope_or_400(db, request: AgentQueryRequest):
     return scope
 
 
+def _build_initial_chunk_dicts(texts: list[str]) -> list[dict]:
+    return [{
+        "id": hashlib.sha1(text.encode("utf-8")).hexdigest(),
+        "text": text,
+        "page": None,
+        "source": None,
+    } for text in texts]
+
+
+def _mirror_chunks_on_node(node: ResearchNode, chunk_dicts: list[dict]) -> None:
+    node.chunks = [
+        Chunk(
+            id=chunk["id"],
+            text=chunk["text"],
+            page=chunk["page"],
+            source=chunk["source"],
+        )
+        for chunk in chunk_dicts
+    ]
+    node.chunk_ids = {chunk["id"] for chunk in chunk_dicts}
+
+
+def _attach_questions_in_memory_and_db(db, tree: ResearchTree, questions: list[str], *, source: str) -> None:
+    if not questions:
+        return
+
+    qids = upsert_questions(db, questions, source=source)
+    for qid, qtext in zip(qids, questions):
+        best = choose_best_node_for_question(db, qtext, tree)
+        attach_questions_to_node(db, best.id, [qid])
+        if qtext not in best.questions:
+            best.questions.append(qtext)
+
+
+def _attach_outline_questions(section, node, db) -> None:
+    if getattr(section, "questions", None):
+        qids = upsert_questions(db, section.questions, source="outline")
+        attach_questions_to_node(db, node.id, qids)
+    for ssub, nsub in zip(section.subsections or [], node.subnodes or []):
+        _attach_outline_questions(ssub, nsub, db)
+
+
+def _collect_section_outputs(node: ResearchNode) -> list[dict]:
+    out = [{"heading": node.title, "text": node.content or ""}]
+    for child in node.subnodes:
+        out.extend(_collect_section_outputs(child))
+    return out
+
+
 def _run_full_agent_pipeline(request: AgentQueryRequest, *, session_id: str | None = None) -> dict:
+    active_session_id = session_id or str(uuid4())
+    user_query = request.query
     db = SessionLocal()
     try:
         scope = _resolve_scope_or_400(db, request)
-    finally:
-        db.close()
+        top_chunks = search_chunks(user_query, top_k=request.top_k, scope=scope)
 
-    active_session_id = session_id or str(uuid4())
-    user_query = request.query
-    top_chunks = search_chunks(user_query, top_k=request.top_k, scope=scope)
-
-    root_node = ResearchNode(title=request.query)
-    tree = ResearchTree(query=user_query, root_node=root_node, scope=scope)
-
-    db = SessionLocal()
-    try:
+        root_node = ResearchNode(title=request.query)
+        tree = ResearchTree(query=user_query, root_node=root_node, scope=scope)
         repo = ResearchTreeRepository(db)
         repo.save(tree, active_session_id)
 
-        chunk_dicts = [{
-            "id": hashlib.sha1(c.encode("utf-8")).hexdigest(),
-            "text": c,
-            "page": None,
-            "source": None
-        } for c in top_chunks]
+        chunk_dicts = _build_initial_chunk_dicts(top_chunks)
         upsert_chunks(db, chunk_dicts)
-        attach_chunks_to_node(db, tree.root_node.id, [c["id"] for c in chunk_dicts])
-        db.commit()
+        attach_chunks_to_node(db, tree.root_node.id, [chunk["id"] for chunk in chunk_dicts])
+        _mirror_chunks_on_node(tree.root_node, chunk_dicts)
+
+        subq = generate_subquestions_from_chunks([chunk["text"] for chunk in chunk_dicts], user_query)
+        _attach_questions_in_memory_and_db(db, tree, subq, source="root_subq")
+
+        outline = generate_outline_from_tree(tree)
     finally:
         db.close()
 
-    db = SessionLocal()
-    try:
-        repo = ResearchTreeRepository(db)
-        tree_for_subq = repo.load(active_session_id)
-        root_chunks_text = [c.text for c in tree_for_subq.root_node.chunks]
-    finally:
-        db.close()
-
-    subq = generate_subquestions_from_chunks(root_chunks_text, user_query)
-
-    db = SessionLocal()
-    try:
-        repo = ResearchTreeRepository(db)
-        tree_with_root_questions = repo.load(active_session_id)
-
-        if subq:
-            qids = upsert_questions(db, subq, source="root_subq")
-            for qid, qtext in zip(qids, subq):
-                best = choose_best_node_for_question(db, qtext, tree_with_root_questions)
-                attach_questions_to_node(db, best.id, [qid])
-
-        db.commit()
-    finally:
-        db.close()
-
-    db = SessionLocal()
-    try:
-        repo = ResearchTreeRepository(db)
-        tree_for_outline = repo.load(active_session_id)
-    finally:
-        db.close()
-
-    outline = generate_outline_from_tree(tree_for_outline)
     filtered_sections = _filter_structural_sections(outline.sections)
 
     if not filtered_sections:
@@ -122,23 +132,14 @@ def _run_full_agent_pipeline(request: AgentQueryRequest, *, session_id: str | No
     db = SessionLocal()
     try:
         repo = ResearchTreeRepository(db)
-        tree = repo.load(active_session_id)
-
         tree.root_node.subnodes = [node_from_outline_section(s) for s in filtered_sections]
         if outline.title:
             tree.root_node.title = outline.title
         tree.assign_rank_and_level()
         repo.save(tree, active_session_id)
 
-        def _attach_all(section, node):
-            if getattr(section, "questions", None):
-                qids = upsert_questions(db, section.questions, source="outline")
-                attach_questions_to_node(db, node.id, qids)
-            for ssub, nsub in zip(section.subsections or [], node.subnodes or []):
-                _attach_all(ssub, nsub)
-
         for s, n in zip(filtered_sections, tree.root_node.subnodes):
-            _attach_all(s, n)
+            _attach_outline_questions(s, n, db)
 
         db.commit()
     finally:
@@ -146,38 +147,21 @@ def _run_full_agent_pipeline(request: AgentQueryRequest, *, session_id: str | No
 
     from app.utils.agent.expander import process_node_recursively
     section_outputs = []
-    db = SessionLocal()
-    try:
-        repo = ResearchTreeRepository(db)
-        tree = repo.load(active_session_id)
+    for node in tree.root_node.subnodes:
+        process_node_recursively(node, tree, top_k=10)
 
-        for node in tree.root_node.subnodes:
-            process_node_recursively(node, tree, top_k=10)
-
-        tree = repo.load(active_session_id)
-
-        def collect(n):
-            out = [{"heading": n.title, "text": n.content or ""}]
-            for c in n.subnodes:
-                out.extend(collect(c))
-            return out
-
-        for n in tree.root_node.subnodes:
-            section_outputs.extend(collect(n))
-
-        db.commit()
-    finally:
-        db.close()
+    for node in tree.root_node.subnodes:
+        section_outputs.extend(_collect_section_outputs(node))
 
     from app.utils.agent.writer import write_executive_summary, write_overall_conclusion
+    exec_summary = write_executive_summary(tree)
+    overall_concl = write_overall_conclusion(tree)
+    tree.root_node.summary = exec_summary
+    tree.root_node.conclusion = overall_concl
+    tree.root_node.is_final = True
+
     db = SessionLocal()
     try:
-        repo = ResearchTreeRepository(db)
-        tree = repo.load(active_session_id)
-
-        exec_summary = write_executive_summary(tree)
-        overall_concl = write_overall_conclusion(tree)
-
         update_node_fields(
             db,
             tree.root_node.id,
@@ -189,13 +173,7 @@ def _run_full_agent_pipeline(request: AgentQueryRequest, *, session_id: str | No
     finally:
         db.close()
 
-    db = SessionLocal()
-    try:
-        repo = ResearchTreeRepository(db)
-        tree = repo.load(active_session_id)
-        article = finalize_article_from_tree(tree)
-    finally:
-        db.close()
+    article = finalize_article_from_tree(tree)
 
     return {
         "session_id": active_session_id,

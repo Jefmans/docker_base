@@ -1,0 +1,284 @@
+RESEARCH TREE UPDATE AND CLEANUP PLAN
+=====================================
+
+Purpose
+-------
+This file is the working reference for the research-tree pipeline.
+It documents:
+
+1. The current flow used to build a long-form answer
+2. The main code locations involved
+3. What has already been fixed
+4. What still needs cleanup
+5. The recommended order for future changes
+
+This should be updated whenever the research-tree pipeline changes.
+
+
+CURRENT ROLE OF THE RESEARCH TREE
+---------------------------------
+The research tree is still used for long-form answer generation.
+
+It is NOT used for the normal PDF/project/all search box in the frontend.
+
+There are now two separate product paths:
+
+1. Search
+   - Fast retrieval over Elasticsearch
+   - Scoped to one PDF, one project, or all documents
+   - Uses backend/app/routers/query.py
+
+2. Build Answer
+   - Runs the research-tree pipeline
+   - Builds a structured long-form answer
+   - Uses backend/app/routers/agent.py
+
+
+MAIN FILES
+----------
+Core orchestration
+- backend/app/routers/agent.py
+
+Tree model
+- backend/app/models/research_tree.py
+
+Persistence
+- backend/app/repositories/research_tree_repo.py
+- backend/app/db/db.py
+
+Retrieval and expansion
+- backend/app/utils/agent/search_chunks.py
+- backend/app/utils/agent/expander.py
+- backend/app/utils/agent/controller.py
+- backend/app/utils/agent/repo.py
+
+LLM generation
+- backend/app/utils/agent/subquestions.py
+- backend/app/utils/agent/outline.py
+- backend/app/utils/agent/writer.py
+- backend/app/utils/agent/finalizer.py
+
+Supporting scope resolution
+- backend/app/utils/document_scope.py
+
+Build Answer runtime support
+- backend/app/utils/agent/answer_runs.py
+
+
+CURRENT RESEARCH TREE FLOW
+--------------------------
+The current long-form pipeline inside agent.py follows this shape:
+
+1. Resolve scope
+   - Scope can be:
+     a) all documents
+     b) one project
+     c) one PDF
+   - Resolved through backend/app/utils/document_scope.py
+
+2. Retrieve initial chunks
+   - Initial vector retrieval is done through:
+     backend/app/utils/agent/search_chunks.py
+   - This now respects the selected scope
+
+3. Create root tree
+   - A root ResearchTree is created
+   - Root title starts from the user query
+   - Scope is stored on the tree
+
+4. Persist root tree and attach initial chunks
+   - Tree is saved through ResearchTreeRepository
+   - Initial chunks are stored and attached to the root node
+
+5. Generate root subquestions
+   - Subquestions are generated from root chunks
+   - Uses backend/app/utils/agent/subquestions.py
+
+6. Attach root subquestions to the tree
+   - These are routed to the best node currently available
+   - At this stage, that is usually still the root or top-level candidates
+
+7. Generate outline from the tree
+   - Uses backend/app/utils/agent/outline.py
+   - The outline now sees the generated subquestions because they are attached before outline generation
+
+8. Apply outline back into the tree
+   - Outline sections are mapped into ResearchNode children
+   - Outline questions are attached to those nodes
+
+9. Process top-level sections recursively
+   - Each section may:
+     a) enrich with more chunks
+     b) generate new expansion subquestions
+     c) deepen into subnodes if justified
+     d) write the section text
+   - Uses backend/app/utils/agent/expander.py
+
+10. Generate executive summary and overall conclusion
+    - Uses backend/app/utils/agent/writer.py
+
+11. Finalize article text from the tree
+    - Uses backend/app/utils/agent/finalizer.py
+
+12. Return structured result
+    - title
+    - abstract
+    - outline
+    - sections
+    - article
+
+
+WHAT HAS BEEN FIXED ALREADY
+---------------------------
+1. Scope is now part of the tree flow
+   - The research tree can now be constrained to:
+     a) one PDF
+     b) one project
+     c) all documents
+   - This applies to initial retrieval and later expansion retrieval
+
+2. Build Answer no longer relies on one fragile long HTTP request
+   - The frontend now starts an answer run and polls for status
+   - This avoids connection reset / failed to fetch issues in the browser
+
+3. Root subquestions are now attached before outline generation
+   - This is the first real research-tree correctness fix
+   - Before this change, subquestions were generated but only attached after the outline step
+   - That meant the outline was missing one of its main inputs
+
+4. ResearchTreeRepository.save() no longer commits internally
+   - Transaction ownership now stays with the orchestration layer
+   - This removes a hidden side effect from tree persistence
+
+5. full_run now keeps the working tree in memory longer
+   - Initial chunks, root subquestions, outline generation, outline application,
+     section collection, and final article synthesis no longer require repeated
+     full tree reloads between each step
+   - Database writes still happen where helper layers require them, but the
+     main orchestration is less round-trip heavy
+
+
+CURRENT WEAKNESSES
+------------------
+1. Helper layers still open their own DB sessions during recursive processing
+   - Files:
+     backend/app/utils/agent/expander.py
+     backend/app/utils/agent/controller.py
+     backend/app/utils/agent/writer.py
+   - full_run is leaner now, but the recursive pipeline still hides a lot of
+     DB traffic behind helper calls
+
+2. The pipeline mixes orchestration, persistence, and LLM logic in one large router file
+   - File: backend/app/routers/agent.py
+   - This should eventually become a service layer
+
+3. Root abstract handling is weak
+   - The returned abstract often comes from root_node.content
+   - But root content is not clearly produced as a true abstract stage
+
+4. Summary and conclusion generation are too similar
+   - File: backend/app/utils/agent/writer.py
+   - write_summary() and write_conclusion() are almost the same in structure
+   - They should become clearly separate writing goals
+
+5. Initial root chunks lose metadata
+   - Initial chunks are stored with page=None and source=None
+   - This loses provenance that was available in vector retrieval
+
+6. Tree persistence is append/update oriented, not fully pruning old branches
+   - File: backend/app/repositories/research_tree_repo.py
+   - This can leave stale nodes if a structure changes significantly
+
+7. full_run still reopens sessions around major phases
+   - File: backend/app/routers/agent.py
+   - The worst repeated tree reloads are gone, but there are still separate
+     sessions for the setup, outline persistence, and root finalization phases
+
+
+RECOMMENDED CLEANUP ORDER
+-------------------------
+Phase 1: Correctness
+1. Done: attach root subquestions before outline generation
+2. Generate a real abstract stage instead of using root content ambiguously
+3. Separate summary and conclusion prompts cleanly
+
+Phase 2: Transaction cleanup
+1. Done: remove internal commit from ResearchTreeRepository.save()
+2. Keep the orchestration layer as the owner of commit boundaries
+3. Make tree operations more predictable in one run
+
+Phase 3: Session and reload reduction
+1. Done: reduce unnecessary tree reloads in full_run
+2. Keep pushing DB session ownership out of helper layers
+3. Persist checkpoints only where needed
+
+Phase 4: Retrieval quality and provenance
+1. Keep page/source metadata on initial root chunks
+2. Improve retrieval payloads used for writing
+3. Tune top_k separately for:
+   - initial retrieval
+   - expansion retrieval
+   - section writing context
+
+Phase 5: Code structure
+1. Move large orchestration logic out of backend/app/routers/agent.py
+2. Introduce a dedicated agent service layer
+3. Keep routers thin and operational
+
+Phase 6: Optional product improvements
+1. Add multiple answer modes:
+   - summary
+   - article
+   - article depth levels
+2. Add answer-run history in the frontend
+3. Add export options directly from Build Answer results
+
+
+NEXT RECOMMENDED CHANGE
+-----------------------
+The next best cleanup step is:
+
+Push DB session ownership out of recursive helper layers
+
+Why this is next:
+- the top-level orchestration is cleaner now, so the remaining hidden DB work is
+  concentrated in expander/controller/writer
+- it will make transaction boundaries explicit across the whole tree pipeline
+- it will make later service extraction much easier
+
+Expected effect:
+- fewer hidden DB round-trips inside recursion
+- more predictable transaction boundaries
+- a clearer split between orchestration and helper logic
+
+
+ACCEPTANCE CRITERIA FOR THE NEXT STEP
+-------------------------------------
+When the session/reload cleanup is done:
+
+1. expander/controller/writer should be callable with an existing DB session
+2. The logic should remain transactionally correct
+3. full_run should still work end-to-end
+4. start_answer_run / polling flow should still work
+5. Tree exports should still load the correct persisted state
+
+
+NOTES FOR FUTURE CHANGES
+------------------------
+When changing the research-tree pipeline, always check:
+
+1. Does the selected scope still flow through all retrieval steps?
+2. Are subquestions attached before outline generation?
+3. Are transactions owned by the orchestration layer, not hidden in helpers?
+4. Are retrieved chunks keeping enough provenance for debugging and citations?
+5. Does Build Answer still work through start + poll instead of one long request?
+
+
+CHANGE LOG
+----------
+2026-03-04
+- Added scope-aware tree behavior
+- Added asynchronous answer-run transport for Build Answer
+- Fixed root subquestion ordering so outline generation now sees them
+- Removed hidden commit behavior from ResearchTreeRepository.save()
+- Reduced full_run tree reloads by keeping the working tree in memory longer
