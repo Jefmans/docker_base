@@ -118,13 +118,16 @@ def _run_full_agent_pipeline(
         _report_progress(progress_callback, "Resolving scope")
         scope = _resolve_scope_or_400(db, request)
         plan = build_research_plan(user_query, scope, requested_top_k=request.top_k)
-        _report_progress(progress_callback, "Retrieving initial chunks")
-        top_chunks = search_chunks(user_query, top_k=plan.root_top_k, scope=scope)
 
+        _report_progress(progress_callback, "Initializing research tree")
         root_node = ResearchNode(title=request.query)
         tree = ResearchTree(query=user_query, root_node=root_node, scope=scope, plan=plan)
         repo = ResearchTreeRepository(db)
         repo.save(tree, active_session_id)
+        db.commit()
+
+        _report_progress(progress_callback, "Searching initial evidence")
+        top_chunks = search_chunks(user_query, top_k=plan.root_top_k, scope=scope)
 
         chunk_dicts = _build_initial_chunk_dicts(top_chunks)
         upsert_chunks(db, chunk_dicts)

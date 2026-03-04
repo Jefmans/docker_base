@@ -3,6 +3,7 @@ const apiBase = new URL(`${rootPath.replace(/\/$/, "")}/`, window.location.origi
 
 const state = {
   projects: [],
+  projectsLoaded: false,
   documents: [],
   searchResults: null,
   answerResult: null,
@@ -10,6 +11,8 @@ const state = {
   answerTree: null,
   libraryTimer: null,
   answerPollTimer: null,
+  answerPollDelay: 2500,
+  lastAnswerStage: null,
 };
 
 const elements = {
@@ -539,6 +542,26 @@ function renderAnswerTree() {
   `;
 }
 
+function resetAnswerPollingState() {
+  state.answerPollDelay = 2500;
+  state.lastAnswerStage = null;
+}
+
+function nextAnswerPollDelay(payload) {
+  const stage = payload?.stage || "";
+  if (payload?.status !== "running") {
+    resetAnswerPollingState();
+    return 2500;
+  }
+  if (!stage || stage !== state.lastAnswerStage) {
+    state.lastAnswerStage = stage;
+    state.answerPollDelay = 2500;
+    return state.answerPollDelay;
+  }
+  state.answerPollDelay = Math.min(state.answerPollDelay + 1500, 12000);
+  return state.answerPollDelay;
+}
+
 async function refreshAnswerTree(sessionId) {
   try {
     const payload = await fetchJson(`agent/tree/${sessionId}`);
@@ -551,7 +574,7 @@ async function refreshAnswerTree(sessionId) {
   }
 }
 
-function scheduleAnswerPoll(sessionId, delayMs = 2500) {
+function scheduleAnswerPoll(sessionId, delayMs = state.answerPollDelay) {
   if (state.answerPollTimer) {
     window.clearTimeout(state.answerPollTimer);
   }
@@ -585,7 +608,7 @@ async function pollAnswerRun(sessionId) {
     }
 
     renderAnswer();
-    scheduleAnswerPoll(sessionId);
+    scheduleAnswerPoll(sessionId, nextAnswerPollDelay(payload));
   } catch (error) {
     console.error(error);
     elements.answerHelper.textContent = error.message;
@@ -602,13 +625,21 @@ async function fetchJson(path, options = {}) {
   return response.json();
 }
 
-async function loadLibrary() {
+async function loadLibrary(options = {}) {
+  const { includeProjects = false } = options;
   try {
-    const [projectPayload, documentPayload] = await Promise.all([
-      fetchJson("projects/"),
-      fetchJson("documents/"),
-    ]);
-    state.projects = projectPayload.projects || [];
+    let documentPayload;
+    if (includeProjects || !state.projectsLoaded) {
+      const [projectPayload, docsPayload] = await Promise.all([
+        fetchJson("projects/"),
+        fetchJson("documents/"),
+      ]);
+      state.projects = projectPayload.projects || [];
+      state.projectsLoaded = true;
+      documentPayload = docsPayload;
+    } else {
+      documentPayload = await fetchJson("documents/");
+    }
     state.documents = documentPayload.documents || [];
     renderJobs();
   } catch (error) {
@@ -626,9 +657,9 @@ function scheduleLibraryRefresh() {
   const hasActiveJobs = state.documents.some((document) =>
     ["pending", "running"].includes(document.latest_job?.status)
   );
-  const delayMs = hasActiveJobs ? 3000 : 15000;
+  const delayMs = hasActiveJobs ? 8000 : 45000;
   state.libraryTimer = window.setTimeout(() => {
-    loadLibrary().catch(console.error);
+    loadLibrary({ includeProjects: false }).catch(console.error);
   }, delayMs);
 }
 
@@ -664,7 +695,7 @@ async function handleUpload(event) {
     const payload = await response.json();
     elements.uploadForm.reset();
     elements.uploadHelper.textContent = `${payload.display_name || file.name} uploaded and queued.`;
-    await loadLibrary();
+    await loadLibrary({ includeProjects: true });
     setScopeValue("document", payload.document_id);
   } catch (error) {
     console.error(error);
@@ -687,7 +718,7 @@ async function updateDocumentProject(documentId, projectName) {
         project_name: projectName,
       }),
     });
-    await loadLibrary();
+    await loadLibrary({ includeProjects: true });
     setSignal("live", "Project updated");
   } catch (error) {
     console.error(error);
@@ -724,7 +755,7 @@ async function handleDeleteDocument(document) {
       state.answerPollTimer = null;
     }
     renderResults();
-    await loadLibrary();
+    await loadLibrary({ includeProjects: true });
     setSignal("live", "Document deleted");
   } catch (error) {
     console.error(error);
@@ -807,6 +838,7 @@ async function runBuildAnswer() {
     state.answerResult = null;
     state.answerRun = startPayload;
     state.answerTree = null;
+    resetAnswerPollingState();
     renderAnswer();
     setSignal("live", "Answer queued");
     refreshAnswerTree(startPayload.session_id).catch(console.error);
@@ -879,7 +911,7 @@ function bootstrap() {
   bindDropzone();
   renderResults();
   renderAnswer();
-  loadLibrary().catch(console.error);
+  loadLibrary({ includeProjects: true }).catch(console.error);
 }
 
 bootstrap();
