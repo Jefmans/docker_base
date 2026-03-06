@@ -24,7 +24,7 @@ from app.utils.agent.search_chunks import search_chunks
 from app.utils.agent.subquestions import generate_subquestions_from_chunks
 from app.utils.agent.title_from_cluster import title_from_cluster as llm_title_from_cluster
 from app.utils.agent.topics import group_semantic
-from app.utils.agent.writer import write_section
+from app.utils.agent.writer import is_section_aligned_with_query, write_section
 
 
 logger = logging.getLogger(__name__)
@@ -238,6 +238,37 @@ def process_node_recursively(node: ResearchNode, tree: ResearchTree, top_k: int 
         tree,
         top_k=top_k,
     )
+    aligned, alignment_reason = is_section_aligned_with_query(
+        node,
+        root_query=tree.query,
+        context_chunk_limit=execution_plan.context_chunk_limit,
+    )
+    logger.info(
+        "Node '%s' alignment check aligned=%s reason=%s",
+        node.title,
+        aligned,
+        alignment_reason,
+    )
+    if not aligned:
+        node.content = None
+        node.summary = None
+        node.conclusion = None
+        node.is_final = True
+        db = SessionLocal()
+        try:
+            update_node_fields(
+                db,
+                node.id,
+                content=None,
+                summary=None,
+                conclusion=None,
+                is_final=True,
+            )
+            db.commit()
+        finally:
+            db.close()
+        logger.info("Skipping off-topic node '%s' after alignment gate", node.title)
+        return
 
     did_deepen = False
     if execution_plan.should_attempt_depth:
@@ -298,6 +329,8 @@ def process_node_recursively(node: ResearchNode, tree: ResearchTree, top_k: int 
 
     write_section(
         node,
+        root_query=tree.query,
+        output_style=tree.plan.output_style,
         context_chunk_limit=execution_plan.context_chunk_limit,
         length_hint=execution_plan.section_length_hint,
     )

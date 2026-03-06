@@ -35,6 +35,7 @@ class ResearchPlan(BaseModel):
     min_novel_questions_to_deepen: int = 1
     section_length_hint: str = "2-3 focused paragraphs"
     evidence_profile: str = "narrow"
+    output_style: str = "scientific_article"
 
 class Chunk(BaseModel):
     id: str

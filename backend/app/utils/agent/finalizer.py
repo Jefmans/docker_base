@@ -15,6 +15,20 @@ def finalize_article_from_tree(tree: ResearchTree) -> str:
         parts.append(f"**Abstract**\n\n{abstract}\n")
 
     def walk(node, level: int = 2):
+        child_lines = []
+        for sub in node.subnodes:
+            child_lines.extend(walk(sub, level + 1))
+
+        has_local_content = any(
+            [
+                bool((node.content or "").strip()),
+                bool((node.summary or "").strip()),
+                bool((node.conclusion or "").strip()),
+            ]
+        )
+        if not has_local_content and not child_lines:
+            return []
+
         lines = [f"{'#' * level} {node.title}\n"]
         if node.content:
             lines.append(node.content.strip() + "\n")
@@ -22,8 +36,7 @@ def finalize_article_from_tree(tree: ResearchTree) -> str:
             lines.append(f"**Section Summary:** {node.summary.strip()}\n")
         if node.conclusion:
             lines.append(f"**Section Conclusion:** {node.conclusion.strip()}\n")
-        for sub in node.subnodes:
-            lines.extend(walk(sub, level + 1))
+        lines.extend(child_lines)
         return lines
 
     for section in tree.root_node.subnodes:

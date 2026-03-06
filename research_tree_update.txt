@@ -214,6 +214,28 @@ WHAT HAS BEEN FIXED ALREADY
       retrieve -> ask follow-up questions -> retrieve again -> write/deepen decision
     - This reduces reliance on one single retrieval pass per node
 
+13. Node-level relevance gate now checks alignment with the original question
+    - Files:
+      backend/app/utils/agent/writer.py
+      backend/app/utils/agent/expander.py
+    - Before writing/deepening a node, the pipeline now runs an explicit
+      alignment check versus the root question
+    - Off-topic branches are skipped instead of being expanded into long text
+
+14. Output style is now configurable end-to-end
+    - Files:
+      backend/app/static/index.html
+      backend/app/static/app.js
+      backend/app/routers/agent.py
+      backend/app/utils/agent/outline.py
+      backend/app/utils/agent/writer.py
+      backend/app/models/research_tree.py
+    - Build Answer now supports style selection:
+      a) scientific article
+      b) blogpost
+      c) newspaper
+    - The selected style now flows into planning metadata and writing prompts
+
 
 CURRENT WEAKNESSES
 ------------------
@@ -498,3 +520,5 @@ CHANGE LOG
 - Tuned plan heuristics to widen root candidate retrieval and separate candidate budget from LLM context budget
 - Relaxed hard minimum subquestion counts so sparse evidence can produce fewer questions
 - Added per-node follow-up retrieval from generated expansion questions before section writing/deepening decisions
+- Added a node-level alignment gate so sections are checked against the original question before writing
+- Added output-style selection (scientific/article, blogpost, newspaper) from UI through backend prompts

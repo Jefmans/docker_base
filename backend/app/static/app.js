@@ -32,6 +32,7 @@ const elements = {
   searchButton: document.getElementById("search-button"),
   answerForm: document.getElementById("answer-form"),
   answerQueryInput: document.getElementById("answer-query-input"),
+  answerStyleSelect: document.getElementById("answer-style-select"),
   answerButton: document.getElementById("answer-button"),
   answerHelper: document.getElementById("answer-helper"),
   answerEmpty: document.getElementById("answer-empty"),
@@ -384,6 +385,7 @@ function renderAnswer() {
 
   if (state.answerRun && state.answerRun.status !== "completed") {
     const scope = state.answerRun.scope || { mode: "all" };
+    const outputStyle = scope.output_style || state.answerRun.result?.plan?.output_style || "scientific_article";
     const failureBlock =
       state.answerRun.status === "failed" && state.answerRun.error
         ? `<p class="helper">Failure during ${escapeHtml(state.answerRun.failed_stage || state.answerRun.stage || "processing")}: ${escapeHtml(state.answerRun.error)}</p>`
@@ -399,6 +401,7 @@ function renderAnswer() {
           </div>
           <div class="answer-meta">
             <span class="metadata-chip">${escapeHtml(humanScopeLabel(scope))}</span>
+            <span class="metadata-chip">style ${escapeHtml(outputStyle)}</span>
             <span class="metadata-chip">status ${escapeHtml(state.answerRun.status || "pending")}</span>
             <span class="metadata-chip">stage ${escapeHtml(state.answerRun.stage || "Queued")}</span>
             <span class="metadata-chip">session ${escapeHtml(state.answerRun.session_id || "")}</span>
@@ -412,6 +415,7 @@ function renderAnswer() {
 
   const outline = state.answerResult.outline || [];
   const scope = state.answerResult.scope || { mode: "all" };
+  const outputStyle = state.answerResult.plan?.output_style || scope.output_style || "scientific_article";
   const article = state.answerResult.article || "";
 
   elements.answerEmpty.hidden = true;
@@ -425,6 +429,7 @@ function renderAnswer() {
         </div>
         <div class="answer-meta">
           <span class="metadata-chip">${escapeHtml(humanScopeLabel(scope))}</span>
+          <span class="metadata-chip">style ${escapeHtml(outputStyle)}</span>
           <span class="metadata-chip">${escapeHtml(state.answerRun?.stage || "Completed")}</span>
           <span class="metadata-chip">session ${escapeHtml(state.answerResult.session_id || "")}</span>
         </div>
@@ -777,6 +782,7 @@ async function runSearch() {
   const payload = {
     query,
     top_k: Number(elements.topKSelect.value),
+    output_style: elements.answerStyleSelect?.value || "scientific_article",
   };
   if (scope.mode === "document") {
     payload.document_id = scope.document_id;

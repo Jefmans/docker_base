@@ -110,6 +110,16 @@
               <span>Research question</span>
               <textarea id="answer-query-input" rows="5" placeholder="Ask for a structured long-form answer. The selected scope above will constrain the research tree." required></textarea>
             </label>
+            <div class="search-grid">
+              <label class="field">
+                <span>Output style</span>
+                <select id="answer-style-select">
+                  <option value="scientific_article" selected>Scientific article</option>
+                  <option value="blogpost">Blogpost</option>
+                  <option value="newspaper">Newspaper</option>
+                </select>
+              </label>
+            </div>
             <button class="primary-button" type="submit" id="answer-button">Build answer</button>
           </form>
           <p class="helper" id="answer-helper">

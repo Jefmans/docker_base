@@ -6,6 +6,15 @@ from app.models.outline_model import Outline
 from app.models.research_tree import ResearchTree
 
 
+def _outline_style_guidance(output_style: str | None) -> str:
+    key = (output_style or "scientific_article").strip().lower()
+    if key in {"blog", "blogpost"}:
+        return "Use an accessible blog structure with clear reader-friendly section titles."
+    if key in {"newspaper", "news"}:
+        return "Use a concise newspaper-style structure, prioritizing key facts and direct section titles."
+    return "Use a formal scientific structure with precise, neutral section titles."
+
+
 def generate_outline_from_tree(tree: ResearchTree) -> Outline:
     llm = ChatOpenAI(model="gpt-4o", temperature=0)
     parser = PydanticOutputParser(pydantic_object=Outline)
@@ -47,6 +56,7 @@ def generate_outline_from_tree(tree: ResearchTree) -> Outline:
             Treat idiomatic, literary, dialectal, archaic, or figurative expressions carefully.
             Do not build sections around an unverified literal interpretation.
             If the meaning of a phrase is ambiguous, preserve that ambiguity in the outline instead of resolving it prematurely.
+            Style requirement: {style_guidance}
 
             MAIN QUESTION:
             {query}
@@ -71,6 +81,7 @@ def generate_outline_from_tree(tree: ResearchTree) -> Outline:
             "min_sections",
             "max_sections",
             "max_subsections",
+            "style_guidance",
         ],
         partial_variables={"format_instructions": parser.get_format_instructions()},
     )
@@ -86,5 +97,6 @@ def generate_outline_from_tree(tree: ResearchTree) -> Outline:
             "min_sections": min_sections,
             "max_sections": max_sections,
             "max_subsections": tree.plan.outline_max_subsections,
+            "style_guidance": _outline_style_guidance(tree.plan.output_style),
         }
     )

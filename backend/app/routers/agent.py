@@ -30,6 +30,7 @@ class AgentQueryRequest(BaseModel):
     top_k: int = 5
     document_id: str | None = None
     project_id: str | None = None
+    output_style: str = "scientific_article"
 
 
 def _resolve_scope_or_400(db, request: AgentQueryRequest):
@@ -143,7 +144,12 @@ def _run_full_agent_pipeline(
         )
         _report_progress(progress_callback, "Resolving scope")
         scope = _resolve_scope_or_400(db, request)
-        plan = build_research_plan(user_query, scope, requested_top_k=request.top_k)
+        plan = build_research_plan(
+            user_query,
+            scope,
+            requested_top_k=request.top_k,
+            output_style=request.output_style,
+        )
         logger.info(
             "[answer-run %s] Scope resolved: mode=%s label=%r document_count=%s filenames=%s",
             active_session_id,
@@ -361,7 +367,12 @@ async def start_query_session(request: AgentQueryRequest):
     finally:
         db.close()
 
-    plan = build_research_plan(user_query, scope, requested_top_k=request.top_k)
+    plan = build_research_plan(
+        user_query,
+        scope,
+        requested_top_k=request.top_k,
+        output_style=request.output_style,
+    )
     top_chunks = search_chunks(user_query, top_k=plan.root_top_k, scope=scope)
 
     root_node = ResearchNode(title=user_query)
@@ -507,6 +518,8 @@ def write_section_by_id(session_id: str, section_id: int):
         # Generate content (writer already reads questions/chunks from DB)
         write_section(
             node,
+            root_query=tree.query,
+            output_style=tree.plan.output_style,
             context_chunk_limit=tree.plan.section_context_chunks,
             length_hint=tree.plan.section_length_hint,
         )
@@ -640,8 +653,16 @@ def complete_section(session_id: str, section_id: int):
 
         node = get_top_level_section_or_400(tree, section_id)
 
-        node.summary = write_summary(node, context_chunk_limit=tree.plan.section_context_chunks)
-        node.conclusion = write_conclusion(node, context_chunk_limit=tree.plan.section_context_chunks)
+        node.summary = write_summary(
+            node,
+            output_style=tree.plan.output_style,
+            context_chunk_limit=tree.plan.section_context_chunks,
+        )
+        node.conclusion = write_conclusion(
+            node,
+            output_style=tree.plan.output_style,
+            context_chunk_limit=tree.plan.section_context_chunks,
+        )
         # save_research_tree_db(session_id, tree)
         # persist into DB so the tree is source-of-truth
         update_node_fields(db, node.id, summary=node.summary, conclusion=node.conclusion, is_final=True)
@@ -712,10 +733,12 @@ def start_answer_run(request: AgentQueryRequest, background_tasks: BackgroundTas
         db.close()
 
     session_id = str(uuid4())
+    scope_payload = scope.model_dump()
+    scope_payload["output_style"] = request.output_style
     create_answer_run(
         session_id,
         query=request.query,
-        scope=scope.model_dump(),
+        scope=scope_payload,
     )
     background_tasks.add_task(_run_answer_job, session_id, request)
     return {

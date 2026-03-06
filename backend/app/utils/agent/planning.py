@@ -41,9 +41,24 @@ _COMPLEXITY_TERMS = {
     "verklaar",
 }
 
+_OUTPUT_STYLE_MAP = {
+    "scientific": "scientific_article",
+    "scientific_article": "scientific_article",
+    "blog": "blogpost",
+    "blogpost": "blogpost",
+    "newspaper": "newspaper",
+    "news": "newspaper",
+}
+
 
 def _clamp(value: int, lower: int, upper: int) -> int:
     return max(lower, min(value, upper))
+
+
+def normalize_output_style(value: str | None) -> str:
+    if not value:
+        return "scientific_article"
+    return _OUTPUT_STYLE_MAP.get(value.strip().lower(), "scientific_article")
 
 
 def estimate_query_complexity(query: str, scope: ResearchScope) -> int:
@@ -74,10 +89,17 @@ def estimate_query_complexity(query: str, scope: ResearchScope) -> int:
     return _clamp(score, 0, 7)
 
 
-def build_research_plan(query: str, scope: ResearchScope, *, requested_top_k: int = 5) -> ResearchPlan:
+def build_research_plan(
+    query: str,
+    scope: ResearchScope,
+    *,
+    requested_top_k: int = 5,
+    output_style: str | None = None,
+) -> ResearchPlan:
     complexity = estimate_query_complexity(query, scope)
     document_count = max(scope.document_count, len(scope.filenames), 1)
     broad_scope = scope.mode in {"project", "all"} or document_count > 1
+    normalized_output_style = normalize_output_style(output_style)
 
     # root_top_k is the candidate retrieval budget (broad recall pass)
     root_top_k = _clamp(max(requested_top_k, 18 + (2 * complexity) + min(document_count, 8)), 12, 40)
@@ -126,6 +148,7 @@ def build_research_plan(query: str, scope: ResearchScope, *, requested_top_k: in
         min_novel_questions_to_deepen=min_novel_questions_to_deepen,
         section_length_hint=section_length_hint,
         evidence_profile=evidence_profile,
+        output_style=normalized_output_style,
     )
 
 
