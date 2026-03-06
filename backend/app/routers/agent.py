@@ -17,6 +17,7 @@ from app.utils.agent.router_utils import choose_best_node_for_question, get_top_
 from app.utils.document_scope import resolve_research_scope
 from app.utils.agent.answer_runs import create_answer_run, get_answer_run, update_answer_run
 from app.utils.agent.planning import build_research_plan, refine_research_plan_from_initial_chunks
+from app.utils.agent.overlap import persist_overlap_changes, reduce_tree_overlap
 import hashlib
 from app.db.db import SessionLocal, Session as SessionRecord
 from app.repositories.research_tree_repo import ResearchTreeRepository
@@ -278,6 +279,37 @@ def _run_full_agent_pipeline(
             len((node.content or "").strip()),
         )
 
+    _report_progress(progress_callback, "Consolidating overlapping sections")
+    overlap_decisions, changed_nodes = reduce_tree_overlap(
+        tree,
+        root_query=user_query,
+        output_style=tree.plan.output_style,
+        length_hint=tree.plan.section_length_hint,
+    )
+    if overlap_decisions:
+        logger.info(
+            "[answer-run %s] Overlap consolidation decisions=%s",
+            active_session_id,
+            len(overlap_decisions),
+        )
+        for decision in overlap_decisions[:20]:
+            logger.info(
+                "[answer-run %s] overlap action=%s parent=%r primary=%r secondary=%r reason=%s",
+                active_session_id,
+                decision.action,
+                decision.parent_title,
+                decision.primary_title,
+                decision.secondary_title,
+                decision.reason,
+            )
+    if changed_nodes:
+        db = SessionLocal()
+        try:
+            persist_overlap_changes(db, changed_nodes)
+            db.commit()
+        finally:
+            db.close()
+
     for node in tree.root_node.subnodes:
         section_outputs.extend(_collect_section_outputs(node))
 
@@ -323,6 +355,7 @@ def _run_full_agent_pipeline(
         "abstract": tree.root_node.content or "",
         "scope": tree.scope.model_dump(),
         "plan": tree.plan.model_dump(),
+        "overlap_decisions": [decision.to_dict() for decision in overlap_decisions],
         "outline": [s.dict() for s in filtered_sections],
         "sections": section_outputs,
         "article": article

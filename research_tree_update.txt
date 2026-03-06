@@ -236,6 +236,16 @@ WHAT HAS BEEN FIXED ALREADY
       c) newspaper
     - The selected style now flows into planning metadata and writing prompts
 
+15. Sibling/subsection overlap consolidation now runs before final synthesis
+    - Files:
+      backend/app/utils/agent/overlap.py
+      backend/app/routers/agent.py
+    - The pipeline now compares sibling and sub-sibling section content for overlap
+    - Decision policy currently supports:
+      a) rewrite secondary section to keep only unique angles
+      b) prune secondary section when no unique value remains
+    - Consolidation decisions are logged and included in run result payload
+
 
 CURRENT WEAKNESSES
 ------------------
@@ -245,12 +255,13 @@ CURRENT WEAKNESSES
      evidence density, but the run-level planner still does not inspect
      retrieval scores or source diversity deeply enough
 
-2. The controller still does not prune, merge, or split sections
+2. Structural cleanup is still partial (prune/rewrite exists; merge/split are not complete)
    - Files:
      backend/app/utils/agent/controller.py
      backend/app/utils/agent/expander.py
-   - We now have local evidence-aware execution, but not yet the full bounded
-     refinement loop with overlap reduction and consolidation
+     backend/app/utils/agent/overlap.py
+   - We now have post-write overlap pruning/rewriting, but still do not have
+     full merge/split restructuring at planning/refinement time
 
 3. Helper layers still open their own DB sessions during recursive processing
    - Files:
@@ -463,20 +474,67 @@ while keeping backend/app/utils/agent/expander.py focused on executing one node 
 
 NEXT RECOMMENDED CHANGE
 -----------------------
-The next best cleanup step is:
+The next best execution block is:
 
-Add explicit prune / merge / split decisions to the local refinement controller
+Make output style control structure and size, not only wording.
 
 Why this is next:
-- the first evidence-aware node execution slice now exists
-- the next missing capability is structural cleanup, not just per-node budgets
-- this is what will move the tree closer to the intended bounded local refinement loop
+- current output_style mostly affects writing prompts
+- section/depth planning is still largely query/scope driven
+- this causes similar tree shapes across styles for the same question
 
 Expected effect:
-- fewer repeated or weak branches
-- less overlap between sibling sections
-- less unnecessary deepening
-- a stronger base for later transaction and session cleanup
+- blogpost vs scientific vs newspaper will produce visibly different tree geometry
+- output length will become predictable by style/mode
+- less unnecessary depth for lightweight formats
+
+
+CURRENT STATE SNAPSHOT (2026-03-06)
+-----------------------------------
+Confirmed status:
+1. Trees are persisted and reloadable by session_id
+2. Style selection exists end-to-end (UI -> API -> plan metadata -> prompts)
+3. Node-level alignment gate exists and skips off-topic branches
+
+Confirmed gap:
+1. Style does not yet strongly steer outline size, depth, and expansion policy
+2. Word count is not yet enforced as a hard budget
+3. Local refinement still lacks explicit prune/merge/split consolidation rules
+
+
+NEXT EXECUTION PLAN (ACTIVE)
+----------------------------
+Step 1: Introduce style/mode geometry policy
+- Add explicit output mode:
+  a) brief
+  b) standard
+  c) deep
+- Keep output_style for tone:
+  a) scientific_article
+  b) blogpost
+  c) newspaper
+- Apply style+mode multipliers to:
+  a) outline_target_sections
+  b) desired_depth
+  c) section_subquestion_target
+  d) section_context_chunks
+
+Step 2: Add hard length budgets
+- Add run-level and section-level word targets/ranges to ResearchPlan
+- Enforce in writing prompts and post-write budget checks
+- Add compression pass when section/run exceeds budget
+
+Step 3: Add explicit structural decisions in controller
+- Implement local decisions:
+  a) prune weak/off-topic node
+  b) merge near-duplicate sibling
+  c) split overloaded node
+  d) deepen only when novelty and evidence justify it
+
+Step 4: Consolidation pass after local refinement
+- Remove sibling overlap
+- Merge thin duplicate sections
+- Ensure final tree is compact for the selected style/mode
 
 
 ACCEPTANCE CRITERIA FOR THE NEXT STEP
@@ -522,3 +580,9 @@ CHANGE LOG
 - Added per-node follow-up retrieval from generated expansion questions before section writing/deepening decisions
 - Added a node-level alignment gate so sections are checked against the original question before writing
 - Added output-style selection (scientific/article, blogpost, newspaper) from UI through backend prompts
+
+2026-03-06
+- Updated the active execution plan to prioritize style/mode-driven structure and hard length budgets
+- Recorded the current confirmed gap: output style currently changes wording more than tree geometry
+- Added explicit next-step sequence before prune/merge/split rollout
+- Added first-pass overlap consolidation stage (rewrite/prune secondary siblings) before synthesis
